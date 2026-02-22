@@ -2,6 +2,19 @@ import { json } from "@remix-run/cloudflare";
 import type { LoaderFunctionArgs, MetaFunction } from "@remix-run/cloudflare";
 import { useLoaderData, Link } from "@remix-run/react";
 import { useState } from "react";
+import { z } from "zod";
+
+// Validate URLs: must be http/https, no private IP ranges
+const ScanUrlSchema = z.string().url().refine((url) => {
+  try {
+    const { hostname, protocol } = new URL(url);
+    if (!['http:', 'https:'].includes(protocol)) return false;
+    const privateRanges = /^(localhost|127\.|10\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.|::1$|0\.0\.0\.0)/;
+    return !privateRanges.test(hostname);
+  } catch {
+    return false;
+  }
+}, { message: 'Must be a public http/https URL' });
 
 export const meta: MetaFunction<typeof loader> = ({ data, location }) => {
   const params = new URLSearchParams(location.search);
@@ -51,7 +64,23 @@ export async function loader({ request }: LoaderFunctionArgs) {
     return json({ results: [] as ScanResult[], error: "No URLs provided" });
   }
 
-  const results = await Promise.all(rawUrls.map((u) => scanUrl(u)));
+  // Validate each URL
+  const validUrls: string[] = [];
+  const validationErrors: string[] = [];
+  for (const raw of rawUrls) {
+    const parsed = ScanUrlSchema.safeParse(raw);
+    if (parsed.success) {
+      validUrls.push(parsed.data);
+    } else {
+      validationErrors.push(`${raw}: ${parsed.error.issues[0]?.message ?? 'Invalid URL'}`);
+    }
+  }
+
+  if (validUrls.length === 0) {
+    return json({ results: [] as ScanResult[], error: `Invalid URL(s): ${validationErrors.join('; ')}` });
+  }
+
+  const results = await Promise.all(validUrls.map((u) => scanUrl(u)));
   return json({ results, error: null });
 }
 
@@ -501,7 +530,7 @@ export default function ScanResults() {
 
                 {/* Header card */}
                 <div className="bg-gray-900/80 border border-gray-800 rounded-xl p-6">
-                  <p className="text-xs text-gray-600 font-mono truncate mb-4">{r.url}</p>
+                  <p className="text-xs text-gray-600 font-mono truncate mb-4" title={r.url}>{hostname}</p>
 
                   {r.error ? (
                     <div className="space-y-2">

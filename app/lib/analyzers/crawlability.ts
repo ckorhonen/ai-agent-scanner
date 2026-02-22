@@ -18,24 +18,25 @@ export async function analyzeCrawlability(url: string): Promise<{ score: number;
     fix: isHttps ? undefined : 'Enable HTTPS via Let\'s Encrypt (free) or your hosting provider',
   })
 
-  // ── Response time ────────────────────────────────────────────────────────
-  let responseTimeMs = 0
+  // ── Parallel fetch: robots.txt + sitemap.xml + llms.txt (with timing) ───
   const t0 = Date.now()
-  try {
-    await fetch(`${origin}/robots.txt`, { signal: AbortSignal.timeout(5000) })
-    responseTimeMs = Date.now() - t0
-  } catch {
-    responseTimeMs = 5000
-  }
+
+  const [robotsRes, sitemapRes, llmsRootRes, llmsWellKnownRes] = await Promise.allSettled([
+    fetch(`${origin}/robots.txt`,            { signal: AbortSignal.timeout(4000) }),
+    fetch(`${origin}/sitemap.xml`,           { signal: AbortSignal.timeout(4000) }),
+    fetch(`${origin}/llms.txt`,              { signal: AbortSignal.timeout(4000) }),
+    fetch(`${origin}/.well-known/llms.txt`,  { signal: AbortSignal.timeout(4000) }),
+  ])
+
+  const responseTimeMs = Date.now() - t0
 
   // ── robots.txt ───────────────────────────────────────────────────────────
   let robotsTxt = ''
   let robotsExists = false
   try {
-    const res = await fetch(`${origin}/robots.txt`, { signal: AbortSignal.timeout(3000) })
-    if (res.ok) {
+    if (robotsRes.status === 'fulfilled' && robotsRes.value.ok) {
       robotsExists = true
-      robotsTxt = await res.text()
+      robotsTxt = await robotsRes.value.text()
     }
   } catch {}
 
@@ -64,7 +65,7 @@ Sitemap: https://example.com/sitemap.xml`,
 
   // ── AI crawler allowances ────────────────────────────────────────────────
   const aiCrawlers = ['gptbot', 'claude-web', 'anthropic-ai', 'perplexitybot', 'ccbot']
-  let blockedBots: string[] = []
+  const blockedBots: string[] = []
 
   if (robotsExists) {
     const lower = robotsTxt.toLowerCase()
@@ -110,14 +111,8 @@ Allow: /`,
   })
 
   // ── sitemap.xml ──────────────────────────────────────────────────────────
-  let sitemapExists = false
-  try {
-    const res = await fetch(`${origin}/sitemap.xml`, { signal: AbortSignal.timeout(3000) })
-    if (res.ok) {
-      sitemapExists = true
-      score += 1
-    }
-  } catch {}
+  const sitemapExists = sitemapRes.status === 'fulfilled' && sitemapRes.value.ok
+  if (sitemapExists) score += 1
 
   checks.push({
     name: 'sitemap.xml accessible',
@@ -137,16 +132,10 @@ Sitemap: https://example.com/sitemap.xml`,
   // 844,000+ sites have adopted it. Checks /llms.txt first, then /.well-known/llms.txt
   let llmsExists = false
   let llmsUrl = ''
-  for (const path of ['/llms.txt', '/.well-known/llms.txt']) {
-    try {
-      const res = await fetch(`${origin}${path}`, { signal: AbortSignal.timeout(3000) })
-      if (res.ok) {
-        llmsExists = true
-        llmsUrl = path
-        score += 1
-        break
-      }
-    } catch {}
+  if (llmsRootRes.status === 'fulfilled' && llmsRootRes.value.ok) {
+    llmsExists = true; llmsUrl = '/llms.txt'; score += 1
+  } else if (llmsWellKnownRes.status === 'fulfilled' && llmsWellKnownRes.value.ok) {
+    llmsExists = true; llmsUrl = '/.well-known/llms.txt'; score += 1
   }
 
   checks.push({

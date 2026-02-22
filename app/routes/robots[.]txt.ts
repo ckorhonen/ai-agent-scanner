@@ -1,9 +1,4 @@
-import type { LoaderFunctionArgs } from "@remix-run/cloudflare";
-
-export async function loader({ request }: LoaderFunctionArgs) {
-  const host = new URL(request.url).host;
-  const isCanonical = host.includes("scanner.v1be.codes") || host.includes("ai-agent-scanner.pages.dev");
-
+export async function loader() {
   const content = `User-agent: *
 Allow: /
 Disallow: /scan
