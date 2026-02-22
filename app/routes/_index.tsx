@@ -333,7 +333,9 @@ export default function Index() {
             Free, no login required. Results in under 10 seconds.
           </p>
           <Form method="GET" action="/scan" className="flex gap-2">
+            <label htmlFor="url-cta" className="sr-only">Website URL to scan</label>
             <input
+              id="url-cta"
               name="url" type="url" required
               placeholder="https://yoursite.com"
               className="flex-1 px-4 py-3 bg-gray-900 border border-gray-700 rounded-xl text-white placeholder-gray-600 focus:outline-none focus:border-blue-500 transition text-sm"

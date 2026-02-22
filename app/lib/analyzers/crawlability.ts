@@ -73,7 +73,9 @@ Sitemap: https://example.com/sitemap.xml`,
       const idx = lower.indexOf(bot)
       if (idx !== -1) {
         const around = lower.substring(Math.max(0, idx - 80), idx + 80)
-        if (around.includes('disallow: /')) {
+        // Only flag as blocked if there's a root-level Disallow (i.e. "disallow: /" followed
+        // by end-of-line or whitespace), NOT partial-path disallows like "disallow: /scan"
+        if (/disallow:\s*\/\s*(\r?\n|$)/.test(around)) {
           blockedBots.push(bot)
         }
       }
