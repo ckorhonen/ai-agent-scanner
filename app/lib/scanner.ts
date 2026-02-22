@@ -32,7 +32,9 @@ export async function scanUrl(url: string): Promise<ScanResult> {
       signal: AbortSignal.timeout(10000),
     })
     responseTimeMs = Date.now() - t0
-    html = await res.text()
+    const raw = await res.text()
+    // Cap at 500KB to keep regex analyzers fast on huge pages
+    html = raw.length > 500_000 ? raw.slice(0, 500_000) : raw
   } catch (err) {
     return {
       url,

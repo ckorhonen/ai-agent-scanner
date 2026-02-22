@@ -92,10 +92,6 @@ export default function Index() {
     setUrls(u => { const n = [...u]; n[i] = val; return n; })
   }
 
-  function scanBenchmark(domain: string) {
-    setUrls([`https://${domain}`, "", "", ""])
-  }
-
   return (
     <div className="min-h-screen bg-gray-950 text-white">
 
