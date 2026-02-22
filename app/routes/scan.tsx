@@ -3,7 +3,7 @@ import type { LoaderFunctionArgs } from "@remix-run/cloudflare";
 import { useLoaderData, Link } from "@remix-run/react";
 import { useState } from "react";
 import { scanUrl } from "~/lib/scanner";
-import type { ScanResult, CategoryDetail, CheckResult, Recommendation } from "~/lib/types";
+import type { ScanResult, CategoryDetail, CheckResult, Recommendation, ReadinessLevel } from "~/lib/types";
 
 export async function loader({ request }: LoaderFunctionArgs) {
   const url = new URL(request.url);
@@ -28,7 +28,7 @@ const GRADE_COLOR: Record<string, string> = {
 };
 const GRADE_BG: Record<string, string> = {
   A: "rgba(34,197,94,0.12)", B: "rgba(132,204,22,0.12)",
-  C: "rgba(234,179,8,0.12)",  D: "rgba(249,115,22,0.12)", F: "rgba(239,68,68,0.12)",
+  C: "rgba(234,179,8,0.12)", D: "rgba(249,115,22,0.12)", F: "rgba(239,68,68,0.12)",
 };
 
 const CATEGORY_MAX: Record<string, number> = {
@@ -36,7 +36,7 @@ const CATEGORY_MAX: Record<string, number> = {
 };
 
 const CATEGORY_ICON: Record<string, string> = {
-  usability: "⚡", webmcp: "🤖", semantic: "🏗️", structured: "📊", crawlability: "🕷️", content: "📝",
+  usability: "⚡", webmcp: "🤖", semantic: "🏗️", structured: "📊", crawlability: "🔍", content: "📝",
 };
 
 const IMPACT_PILL: Record<string, string> = {
@@ -70,7 +70,7 @@ function GradeRing({ score, grade }: { score: number; grade: string }) {
             strokeDasharray={`${dash} ${circ - dash}`}
             strokeLinecap="round"
             transform="rotate(-90 70 70)"
-            style={{ filter: `drop-shadow(0 0 6px ${color}80)` }}
+            style={{ filter: `drop-shadow(0 0 8px ${color}80)` }}
           />
         </svg>
         <div
@@ -91,6 +91,18 @@ function GradeRing({ score, grade }: { score: number; grade: string }) {
   );
 }
 
+function LevelBadge({ level }: { level: ReadinessLevel }) {
+  return (
+    <div
+      className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-bold"
+      style={{ background: `${level.color}15`, color: level.color, border: `1px solid ${level.color}30` }}
+    >
+      <span>{level.emoji}</span>
+      <span>Level {level.level}: {level.label}</span>
+    </div>
+  );
+}
+
 function CheckRow({ check }: { check: CheckResult }) {
   const [open, setOpen] = useState(false);
   const hasExtra = check.fix || check.example;
@@ -101,14 +113,13 @@ function CheckRow({ check }: { check: CheckResult }) {
         onClick={() => hasExtra && setOpen(!open)}
         className={`w-full flex items-start gap-3 px-4 py-3 text-left transition-colors ${hasExtra ? "hover:bg-gray-800/40 cursor-pointer" : "cursor-default"}`}
       >
-        {/* Pass/fail icon */}
         <span className={`mt-0.5 text-base shrink-0 ${check.passed ? "text-green-400" : "text-red-400"}`}>
           {check.passed ? "✓" : "✗"}
         </span>
 
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 flex-wrap">
-            <span className={`text-sm font-medium ${check.passed ? "text-gray-200" : "text-white"}`}>
+            <span className={`text-sm font-medium ${check.passed ? "text-gray-300" : "text-white"}`}>
               {check.name}
             </span>
             {!check.passed && (
@@ -121,9 +132,7 @@ function CheckRow({ check }: { check: CheckResult }) {
         </div>
 
         {hasExtra && (
-          <span className="text-gray-600 text-xs shrink-0 mt-0.5">
-            {open ? "▲" : "▼"}
-          </span>
+          <span className="text-gray-600 text-xs shrink-0 mt-0.5">{open ? "▲" : "▼"}</span>
         )}
       </button>
 
@@ -150,6 +159,7 @@ function CategoryCard({ detail }: { detail: CategoryDetail }) {
   const [expanded, setExpanded] = useState(false);
   const pct = Math.round((detail.score / detail.max) * 100);
   const failedChecks = detail.checks.filter(c => !c.passed).length;
+  const passedChecks = detail.checks.filter(c => c.passed).length;
   const barColor = pct >= 75 ? "#22c55e" : pct >= 50 ? "#eab308" : "#ef4444";
 
   return (
@@ -177,8 +187,13 @@ function CategoryCard({ detail }: { detail: CategoryDetail }) {
 
         <div className="flex items-center gap-2 shrink-0">
           {failedChecks > 0 && (
-            <span className="text-xs px-2 py-0.5 rounded-full bg-red-500/20 text-red-400 border border-red-500/30">
-              {failedChecks} fix{failedChecks !== 1 ? "es" : ""}
+            <span className="text-xs px-2 py-0.5 rounded-full bg-red-500/15 text-red-400 border border-red-500/25">
+              {failedChecks} issue{failedChecks !== 1 ? "s" : ""}
+            </span>
+          )}
+          {failedChecks === 0 && passedChecks > 0 && (
+            <span className="text-xs px-2 py-0.5 rounded-full bg-green-500/15 text-green-400">
+              ✓ all clear
             </span>
           )}
           <span className="text-gray-600 text-xs">{expanded ? "▲" : "▼"}</span>
@@ -186,10 +201,20 @@ function CategoryCard({ detail }: { detail: CategoryDetail }) {
       </button>
 
       {expanded && (
-        <div className="border-t border-gray-800 divide-y divide-gray-800/0">
-          {detail.checks.map((check) => (
-            <CheckRow key={check.name} check={check} />
-          ))}
+        <div className="border-t border-gray-800">
+          {/* Educational note */}
+          <div className="px-5 py-3 bg-blue-500/5 border-b border-blue-500/10">
+            <p className="text-xs text-blue-300/80 leading-relaxed">
+              💡 {detail.educationalNote}
+            </p>
+          </div>
+
+          {/* Checks */}
+          <div>
+            {detail.checks.map((check) => (
+              <CheckRow key={check.name} check={check} />
+            ))}
+          </div>
         </div>
       )}
     </div>
@@ -205,14 +230,22 @@ function RecommendationCard({ rec, rank }: { rec: Recommendation; rank: number }
         onClick={() => setOpen(!open)}
         className="w-full flex items-start gap-4 px-5 py-4 hover:bg-gray-800/30 transition-colors text-left"
       >
-        <div className="shrink-0 w-8 h-8 rounded-full bg-gray-800 flex items-center justify-center text-sm font-bold text-gray-400 mt-0.5">
-          {rank}
+        <div
+          className="shrink-0 w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold mt-0.5"
+          style={{
+            background: rank === 1 ? "rgba(234,179,8,0.2)" : "rgba(107,114,128,0.2)",
+            color: rank === 1 ? "#eab308" : "#6b7280",
+          }}
+        >
+          {rank === 1 ? "★" : rank}
         </div>
 
         <div className="flex-1 min-w-0">
           <div className="flex items-start justify-between gap-3 mb-1">
             <span className="text-sm font-semibold text-white leading-snug">{rec.title}</span>
-            <span className="text-green-400 font-bold text-sm shrink-0">+{rec.points} pts</span>
+            <span className="text-green-400 font-bold text-xs shrink-0 mt-0.5 bg-green-500/10 px-2 py-0.5 rounded-full border border-green-500/20">
+              +{rec.points}pts
+            </span>
           </div>
           <p className="text-xs text-gray-400 leading-relaxed mb-2">{rec.description}</p>
           <div className="flex gap-2 flex-wrap">
@@ -222,7 +255,7 @@ function RecommendationCard({ rec, rank }: { rec: Recommendation; rank: number }
             <span className={`text-[10px] px-2 py-0.5 rounded-full font-semibold uppercase tracking-wider ${IMPACT_PILL[rec.impact]}`}>
               {rec.impact} impact
             </span>
-            <span className="text-[10px] px-2 py-0.5 rounded-full font-semibold uppercase tracking-wider bg-gray-700/50 text-gray-400">
+            <span className="text-[10px] px-2 py-0.5 rounded-full font-semibold uppercase tracking-wider bg-gray-700/50 text-gray-500">
               {rec.category}
             </span>
           </div>
@@ -235,8 +268,8 @@ function RecommendationCard({ rec, rank }: { rec: Recommendation; rank: number }
 
       {open && rec.example && (
         <div className="border-t border-gray-800 px-5 py-4 bg-gray-950/60">
-          <p className="text-xs text-gray-500 uppercase tracking-wider mb-2 font-semibold">Code example</p>
-          <pre className="text-xs text-green-300 leading-relaxed overflow-x-auto">
+          <p className="text-[10px] text-gray-500 uppercase tracking-wider mb-2.5 font-semibold">Code example</p>
+          <pre className="text-xs text-green-300 leading-relaxed overflow-x-auto bg-gray-950 rounded-lg p-3 border border-gray-800">
             <code>{rec.example}</code>
           </pre>
         </div>
@@ -249,14 +282,14 @@ function ComparisonTable({ results }: { results: ScanResult[] }) {
   const categories = Object.keys(results[0].scores) as Array<keyof typeof results[0]["scores"]>;
   const labels: Record<string, string> = {
     usability: "⚡ Usability", webmcp: "🤖 WebMCP", semantic: "🏗️ Semantic",
-    structured: "📊 Structured", crawlability: "🕷️ Crawlability", content: "📝 Content",
+    structured: "📊 Structured", crawlability: "🔍 AI Discovery", content: "📝 Content",
   };
 
   return (
     <div className="bg-gray-900/80 border border-gray-800 rounded-xl overflow-hidden">
       <div className="px-6 py-4 border-b border-gray-800 flex items-center gap-2">
         <span className="text-base">⚔️</span>
-        <h2 className="font-semibold text-white">Competitor Comparison</h2>
+        <h2 className="font-semibold text-white text-sm">Side-by-side Comparison</h2>
       </div>
       <div className="overflow-x-auto">
         <table className="w-full text-sm">
@@ -265,16 +298,16 @@ function ComparisonTable({ results }: { results: ScanResult[] }) {
               <th className="text-left px-5 py-3 text-gray-500 text-xs uppercase tracking-wider font-semibold">
                 Category
               </th>
-              {results.map((r) => (
-                <th key={r.url} className="text-left px-4 py-3 min-w-[120px]">
-                  <span className="text-xs font-semibold text-gray-300 block truncate max-w-[140px]">
-                    {new URL(r.url).hostname}
-                  </span>
-                  <span className="text-[10px] text-gray-600">
-                    {r.overall} pts · {r.grade}
-                  </span>
-                </th>
-              ))}
+              {results.map((r) => {
+                let host = r.url
+                try { host = new URL(r.url).hostname } catch {}
+                return (
+                  <th key={r.url} className="text-left px-4 py-3 min-w-[130px]">
+                    <span className="text-xs font-semibold text-gray-300 block truncate max-w-[140px]">{host}</span>
+                    <span className="text-[10px] text-gray-600">{r.overall} pts · Grade {r.grade} · {r.level.label}</span>
+                  </th>
+                )
+              })}
             </tr>
           </thead>
           <tbody>
@@ -292,11 +325,11 @@ function ComparisonTable({ results }: { results: ScanResult[] }) {
                     return (
                       <td key={i} className="px-4 py-3">
                         <div className="flex items-center gap-2">
-                          <div className="w-16 h-1 bg-gray-800 rounded-full">
+                          <div className="w-16 h-1.5 bg-gray-800 rounded-full">
                             <div className="h-full rounded-full" style={{ width: `${pct}%`, background: barColor }} />
                           </div>
-                          <span className={`text-xs font-semibold ${isWinner ? "text-green-400" : "text-gray-400"}`}>
-                            {v}/{max}{isWinner && " 👑"}
+                          <span className={`text-xs font-semibold ${isWinner ? "text-green-400" : "text-gray-500"}`}>
+                            {v}/{max}{isWinner ? " 👑" : ""}
                           </span>
                         </div>
                       </td>
@@ -305,21 +338,79 @@ function ComparisonTable({ results }: { results: ScanResult[] }) {
                 </tr>
               );
             })}
-            <tr className="bg-gray-800/30">
-              <td className="px-5 py-4 font-semibold text-gray-200 text-xs uppercase tracking-wider">Overall</td>
+            <tr className="bg-gray-800/20">
+              <td className="px-5 py-4 font-semibold text-gray-400 text-xs uppercase tracking-wider">Overall</td>
               {results.map((r) => {
                 const isWinner = r.overall === Math.max(...results.map(x => x.overall));
                 const color = GRADE_COLOR[r.grade];
                 return (
                   <td key={r.url} className="px-4 py-4">
-                    <span className="font-black text-lg" style={{ color }}>{r.overall}</span>
-                    <span className="text-gray-500 text-xs ml-1 font-medium">({r.grade}){isWinner && " 🏆"}</span>
+                    <span className="font-black text-xl" style={{ color }}>{r.overall}</span>
+                    <span className="text-gray-500 text-xs ml-1.5 font-medium">({r.grade}){isWinner ? " 🏆" : ""}</span>
                   </td>
                 );
               })}
             </tr>
           </tbody>
         </table>
+      </div>
+    </div>
+  );
+}
+
+function ShareButton() {
+  const [copied, setCopied] = useState(false);
+
+  async function copy() {
+    try {
+      await navigator.clipboard.writeText(window.location.href);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {}
+  }
+
+  return (
+    <button
+      onClick={copy}
+      className="flex items-center gap-1.5 text-xs px-3 py-1.5 bg-gray-800 border border-gray-700 rounded-lg text-gray-400 hover:text-white hover:border-gray-500 transition"
+    >
+      {copied ? "✓ Copied!" : "⎘ Share scan"}
+    </button>
+  );
+}
+
+function NextGradeBanner({ result }: { result: ScanResult }) {
+  const grade = result.grade;
+  if (grade === "A") return null;
+
+  const nextGradeThresholds: Record<string, number> = { F: 40, D: 60, C: 75, B: 90 };
+  const nextGrade: Record<string, string> = { F: "D", D: "C", C: "B", B: "A" };
+  const needed = nextGradeThresholds[grade] - result.overall;
+
+  // Find quickest wins
+  const quickWins = result.recommendations
+    .filter(r => r.effort === "low")
+    .slice(0, 3);
+
+  if (needed <= 0 || quickWins.length === 0) return null;
+
+  return (
+    <div className="bg-blue-500/8 border border-blue-500/20 rounded-xl p-4">
+      <div className="flex items-center gap-2 mb-2">
+        <span className="text-blue-400 text-sm font-bold">
+          🎯 {needed} points to Grade {nextGrade[grade]}
+        </span>
+      </div>
+      <p className="text-xs text-gray-400 mb-3">
+        Quick wins (low effort) that would get you there fastest:
+      </p>
+      <div className="space-y-1">
+        {quickWins.map(w => (
+          <div key={w.title} className="flex items-center gap-2 text-xs">
+            <span className="text-green-400 shrink-0">+{w.points}pts</span>
+            <span className="text-gray-300">{w.title}</span>
+          </div>
+        ))}
       </div>
     </div>
   );
@@ -332,7 +423,7 @@ export default function ScanResults() {
 
   if (error || results.length === 0) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
+      <div className="min-h-screen flex items-center justify-center bg-gray-950">
         <div className="text-center space-y-4">
           <p className="text-5xl">😕</p>
           <p className="text-red-400 font-medium">{error ?? "No results"}</p>
@@ -347,103 +438,147 @@ export default function ScanResults() {
   const isSingle = results.length === 1;
 
   return (
-    <div className="max-w-5xl mx-auto px-4 py-10 space-y-10">
+    <div className="min-h-screen bg-gray-950 text-white">
+      <div className="max-w-5xl mx-auto px-4 py-10 space-y-10">
 
-      {/* ── Nav ── */}
-      <div className="flex items-center justify-between">
-        <Link to="/" className="flex items-center gap-1.5 text-gray-400 hover:text-white text-sm transition-colors">
-          <span>←</span> <span>New scan</span>
-        </Link>
-        <span className="text-xs text-gray-600">
-          {new Date(results[0].timestamp).toLocaleString(undefined, {
-            month: "short", day: "numeric", hour: "2-digit", minute: "2-digit"
-          })}
-        </span>
-      </div>
+        {/* ── Nav ── */}
+        <div className="flex items-center justify-between">
+          <Link to="/" className="flex items-center gap-1.5 text-gray-400 hover:text-white text-sm transition-colors">
+            <span>←</span> <span>New scan</span>
+          </Link>
+          <div className="flex items-center gap-2">
+            <span className="text-xs text-gray-600">
+              {new Date(results[0].timestamp).toLocaleString(undefined, {
+                month: "short", day: "numeric", hour: "2-digit", minute: "2-digit"
+              })}
+            </span>
+            <ShareButton />
+          </div>
+        </div>
 
-      {/* ── Result cards ── */}
-      <div className={`grid gap-8 ${!isSingle ? "lg:grid-cols-2" : "max-w-2xl mx-auto"}`}>
-        {results.map((r) => (
-          <div key={r.url} className="space-y-6">
+        {/* ── Result cards ── */}
+        <div className={`grid gap-8 ${!isSingle ? "lg:grid-cols-2" : "max-w-2xl mx-auto w-full"}`}>
+          {results.map((r) => {
+            let hostname = r.url
+            try { hostname = new URL(r.url).hostname } catch {}
 
-            {/* Header */}
-            <div className="bg-gray-900/80 border border-gray-800 rounded-xl p-6">
-              <p className="text-xs text-gray-500 font-mono truncate mb-5">{r.url}</p>
+            return (
+              <div key={r.url} className="space-y-4">
 
-              {r.error ? (
-                <p className="text-red-400 text-sm">⚠️ {r.error}</p>
-              ) : (
-                <>
-                  <div className="flex items-center justify-between gap-4">
-                    <GradeRing score={r.overall} grade={r.grade} />
+                {/* Header card */}
+                <div className="bg-gray-900/80 border border-gray-800 rounded-xl p-6">
+                  <p className="text-xs text-gray-600 font-mono truncate mb-4">{r.url}</p>
 
-                    {/* Quick stats */}
-                    <div className="flex-1 space-y-2">
-                      {Object.entries(r.scores).slice(0, 6).map(([cat, val]) => {
-                        const max = CATEGORY_MAX[cat] ?? 10;
-                        const pct = Math.round((val / max) * 100);
-                        const barColor = pct >= 75 ? "#22c55e" : pct >= 50 ? "#eab308" : "#ef4444";
-                        return (
-                          <div key={cat} className="flex items-center gap-2 text-xs">
-                            <span className="text-gray-500 w-4">{CATEGORY_ICON[cat]}</span>
-                            <div className="flex-1 h-1 bg-gray-800 rounded-full">
-                              <div className="h-full rounded-full" style={{ width: `${pct}%`, background: barColor }} />
-                            </div>
-                            <span className="text-gray-500 tabular-nums w-10 text-right">
-                              {val}/{max}
-                            </span>
-                          </div>
-                        );
-                      })}
+                  {r.error ? (
+                    <div className="space-y-2">
+                      <p className="text-red-400 text-sm font-medium">⚠️ Scan failed</p>
+                      <p className="text-xs text-gray-500">{r.error}</p>
                     </div>
-                  </div>
+                  ) : (
+                    <>
+                      {/* Score + bars */}
+                      <div className="flex items-center justify-between gap-4 mb-5">
+                        <GradeRing score={r.overall} grade={r.grade} />
+                        <div className="flex-1 space-y-2">
+                          {Object.entries(r.scores).map(([cat, val]) => {
+                            const max = CATEGORY_MAX[cat] ?? 10;
+                            const pct = Math.round((val / max) * 100);
+                            const barColor = pct >= 75 ? "#22c55e" : pct >= 50 ? "#eab308" : "#ef4444";
+                            return (
+                              <div key={cat} className="flex items-center gap-2 text-xs">
+                                <span className="text-gray-500 w-4 shrink-0">{CATEGORY_ICON[cat]}</span>
+                                <div className="flex-1 h-1.5 bg-gray-800 rounded-full">
+                                  <div className="h-full rounded-full" style={{ width: `${pct}%`, background: barColor }} />
+                                </div>
+                                <span className="text-gray-500 tabular-nums w-10 text-right shrink-0">
+                                  {val}/{max}
+                                </span>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
 
-                  {/* Summary badges */}
-                  <div className="flex gap-2 mt-5 flex-wrap">
-                    {r.categoryDetails.filter(d => d.checks.filter(c => !c.passed).length > 0).map(d => (
-                      <span key={d.category} className="text-xs px-2 py-1 rounded-full bg-gray-800 text-gray-400">
-                        {CATEGORY_ICON[d.category]} {d.checks.filter(c => !c.passed).length} {d.label} issue{d.checks.filter(c => !c.passed).length !== 1 ? "s" : ""}
-                      </span>
-                    ))}
-                  </div>
-                </>
-              )}
-            </div>
+                      {/* Level badge + response time */}
+                      <div className="flex items-center justify-between flex-wrap gap-2 mb-4">
+                        <LevelBadge level={r.level} />
+                        {r.responseTimeMs != null && r.responseTimeMs > 0 && (
+                          <span className={`text-xs px-2.5 py-1 rounded-full border font-mono ${
+                            r.responseTimeMs < 1000
+                              ? "bg-green-500/10 text-green-400 border-green-500/20"
+                              : r.responseTimeMs < 3000
+                              ? "bg-yellow-500/10 text-yellow-400 border-yellow-500/20"
+                              : "bg-red-500/10 text-red-400 border-red-500/20"
+                          }`}>
+                            ⏱ {r.responseTimeMs < 1000
+                              ? `${r.responseTimeMs}ms`
+                              : `${(r.responseTimeMs / 1000).toFixed(1)}s`}
+                          </span>
+                        )}
+                      </div>
 
-            {!r.error && (
-              <>
-                {/* Category breakdown */}
-                <div className="space-y-2">
-                  <h3 className="text-xs text-gray-500 uppercase tracking-widest font-semibold px-1">
-                    Category Breakdown
-                    <span className="ml-2 normal-case text-gray-600 font-normal">click to expand</span>
-                  </h3>
-                  {r.categoryDetails.map((detail) => (
-                    <CategoryCard key={detail.category} detail={detail} />
-                  ))}
+                      {/* Natural language summary */}
+                      <div className="bg-gray-800/40 rounded-lg p-3 border border-gray-700/50">
+                        <p className="text-xs text-gray-300 leading-relaxed">{r.summary}</p>
+                      </div>
+                    </>
+                  )}
                 </div>
 
-                {/* Recommendations */}
-                {r.recommendations.length > 0 && (
-                  <div className="space-y-2">
-                    <h3 className="text-xs text-gray-500 uppercase tracking-widest font-semibold px-1">
-                      Recommended Fixes
-                      <span className="ml-2 normal-case text-gray-600 font-normal">ranked by impact</span>
-                    </h3>
-                    {r.recommendations.map((rec, i) => (
-                      <RecommendationCard key={rec.title} rec={rec} rank={i + 1} />
-                    ))}
-                  </div>
+                {!r.error && (
+                  <>
+                    {/* Path to next grade */}
+                    <NextGradeBanner result={r} />
+
+                    {/* Category breakdown */}
+                    <div className="space-y-2">
+                      <h3 className="text-xs text-gray-500 uppercase tracking-widest font-semibold px-1">
+                        Category Breakdown
+                        <span className="ml-2 normal-case text-gray-600 font-normal">click any row for details + fixes</span>
+                      </h3>
+                      {r.categoryDetails.map((detail) => (
+                        <CategoryCard key={detail.category} detail={detail} />
+                      ))}
+                    </div>
+
+                    {/* Recommendations */}
+                    {r.recommendations.length > 0 && (
+                      <div className="space-y-2">
+                        <h3 className="text-xs text-gray-500 uppercase tracking-widest font-semibold px-1">
+                          Prioritised Fixes
+                          <span className="ml-2 normal-case text-gray-600 font-normal">
+                            highest impact, lowest effort first
+                          </span>
+                        </h3>
+                        {r.recommendations.map((rec, i) => (
+                          <RecommendationCard key={rec.title} rec={rec} rank={i + 1} />
+                        ))}
+                      </div>
+                    )}
+
+                    {/* Educational footer */}
+                    <div className="rounded-xl border border-gray-800 p-5 text-xs text-gray-500 space-y-2">
+                      <p className="font-semibold text-gray-400">📖 Learn more</p>
+                      <ul className="space-y-1 list-none">
+                        <li>→ <a href="https://webmcp.ai" target="_blank" rel="noopener noreferrer" className="text-blue-400/70 hover:text-blue-400 transition">WebMCP specification</a> — W3C standard for AI-native HTML</li>
+                        <li>→ <a href="https://llmstxt.org" target="_blank" rel="noopener noreferrer" className="text-blue-400/70 hover:text-blue-400 transition">llmstxt.org</a> — The llms.txt community standard</li>
+                        <li>→ <a href="https://schema.org" target="_blank" rel="noopener noreferrer" className="text-blue-400/70 hover:text-blue-400 transition">Schema.org</a> — Structured data vocabulary</li>
+                        <li>→ <a href="https://github.com/ckorhonen/ai-agent-scanner" target="_blank" rel="noopener noreferrer" className="text-blue-400/70 hover:text-blue-400 transition">GitHub</a> — Contribute checks, report issues</li>
+                      </ul>
+                    </div>
+                  </>
                 )}
-              </>
-            )}
-          </div>
-        ))}
+              </div>
+            );
+          })}
+        </div>
+
+        {/* Competitor comparison */}
+        {results.length > 1 && !results.every(r => r.error) && (
+          <ComparisonTable results={results.filter(r => !r.error)} />
+        )}
+
       </div>
-
-      {/* Competitor comparison */}
-      {results.length > 1 && <ComparisonTable results={results} />}
-
     </div>
   );
 }

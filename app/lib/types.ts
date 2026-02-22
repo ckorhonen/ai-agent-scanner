@@ -4,8 +4,11 @@ export interface ScanResult {
   scores: CategoryScores
   overall: number
   grade: Grade
+  level: ReadinessLevel
+  summary: string
   recommendations: Recommendation[]
   categoryDetails: CategoryDetail[]
+  responseTimeMs?: number
   error?: string
 }
 
@@ -20,16 +23,24 @@ export interface CategoryScores {
 
 export type Grade = 'A' | 'B' | 'C' | 'D' | 'F'
 
+export interface ReadinessLevel {
+  level: 1 | 2 | 3 | 4 | 5
+  label: string
+  emoji: string
+  color: string
+  description: string
+}
+
 export type Impact = 'high' | 'medium' | 'low'
 export type Effort = 'low' | 'medium' | 'high'
 
 export interface CheckResult {
-  name: string           // e.g. "Labels paired with inputs"
+  name: string
   passed: boolean
   impact: Impact
-  detail: string         // e.g. "3/8 inputs have labels"
-  fix?: string           // Actionable fix description
-  example?: string       // Code snippet to fix it
+  detail: string
+  fix?: string
+  example?: string
 }
 
 export interface CategoryDetail {
@@ -38,6 +49,7 @@ export interface CategoryDetail {
   score: number
   max: number
   checks: CheckResult[]
+  educationalNote: string
 }
 
 export interface Recommendation {
