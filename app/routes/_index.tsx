@@ -1,5 +1,12 @@
 import { Form, useNavigation } from "@remix-run/react";
+import type { MetaFunction } from "@remix-run/cloudflare";
 import { useState } from "react";
+
+export const meta: MetaFunction = () => [
+  { title: "AI Agent Readiness Scanner — Is Your Website Ready for AI Agents?" },
+  { name: "description", content: "Free tool to check how well your website works with AI agents. Get scored on WebMCP, llms.txt, structured data, semantic HTML, and crawlability. Includes competitor comparison." },
+  { tagName: "link", rel: "canonical", href: "https://scanner.v1be.codes" },
+];
 
 const LEVELS = [
   {

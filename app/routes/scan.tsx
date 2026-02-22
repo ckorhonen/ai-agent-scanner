@@ -1,7 +1,41 @@
 import { json } from "@remix-run/cloudflare";
-import type { LoaderFunctionArgs } from "@remix-run/cloudflare";
+import type { LoaderFunctionArgs, MetaFunction } from "@remix-run/cloudflare";
 import { useLoaderData, Link } from "@remix-run/react";
 import { useState } from "react";
+
+export const meta: MetaFunction<typeof loader> = ({ data, location }) => {
+  const params = new URLSearchParams(location.search);
+  const urls = params.getAll("url").filter(Boolean);
+
+  if (!data || urls.length === 0) {
+    return [{ title: "Scan Results — AI Agent Readiness Scanner" }];
+  }
+
+  let hostname = urls[0];
+  try { hostname = new URL(urls[0]).hostname; } catch {}
+
+  const result = data.results?.[0];
+  const grade = result?.grade ?? "?";
+  const level = result?.level?.label ?? "";
+  const score = result?.overall ?? 0;
+
+  if (urls.length === 1) {
+    return [
+      { title: `${hostname} — Grade ${grade} (${score}/100) · AI Agent Readiness Scanner` },
+      { name: "description", content: `${hostname} scored ${score}/100 (Grade ${grade}) for AI agent readiness. Level: ${level}. See the full breakdown and prioritised fixes.` },
+      { property: "og:title", content: `${hostname} AI Agent Readiness: Grade ${grade}` },
+      { property: "og:description", content: `${hostname} scored ${score}/100. Level: ${level}. Check your website's AI agent readiness score — free tool.` },
+      { name: "robots", content: "noindex, follow" }, // don't index scan result pages
+    ];
+  }
+
+  const domains = urls.map(u => { try { return new URL(u).hostname; } catch { return u; } });
+  return [
+    { title: `Comparing ${domains.join(" vs ")} — AI Agent Readiness Scanner` },
+    { name: "description", content: `Side-by-side AI agent readiness comparison: ${domains.join(", ")}. Scored on WebMCP, llms.txt, structured data, semantic HTML, and crawlability.` },
+    { name: "robots", content: "noindex, follow" },
+  ];
+};
 import { scanUrl } from "~/lib/scanner";
 import type { ScanResult, CategoryDetail, CheckResult, Recommendation, ReadinessLevel } from "~/lib/types";
 
