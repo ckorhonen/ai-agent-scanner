@@ -13,10 +13,21 @@ export function analyzeStructuredData(html: string): { score: number; checks: Ch
     try {
       const content = block.replace(/<script[^>]*>/i, '').replace(/<\/script>/i, '').trim()
       const data = JSON.parse(content)
-      const schemaType = (data['@type'] || data.type || 'Unknown') as string
-      types.push(schemaType)
       validJsonLd++
       score += 5
+
+      // Handle @graph arrays (e.g., root-level { "@graph": [...] })
+      // and plain single-type schemas
+      if (Array.isArray(data['@graph'])) {
+        for (const item of data['@graph']) {
+          const t = (item['@type'] || item.type) as string | undefined
+          if (t) types.push(t)
+        }
+        if (types.length === 0) types.push('Unknown')
+      } else {
+        const schemaType = (data['@type'] || data.type || 'Unknown') as string
+        types.push(schemaType)
+      }
     } catch {}
   }
 

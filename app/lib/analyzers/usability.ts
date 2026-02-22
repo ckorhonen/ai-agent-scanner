@@ -50,7 +50,15 @@ export function analyzeUsability(html: string): { score: number; checks: CheckRe
   })
 
   // ── CAPTCHA ──────────────────────────────────────────────────────────────
-  const hasCaptcha = /captcha|recaptcha/i.test(html)
+  // Look for actual CAPTCHA implementations: iframes, script sources, and
+  // well-known captcha element class/id patterns — NOT just the word "captcha"
+  // in text content or data attributes (which would be false positives).
+  const hasCaptcha = (
+    /src=["'][^"']*(?:recaptcha|hcaptcha|captcha\.js|challenge\.cloudflare)/i.test(html) ||
+    /class=["'][^"']*(?:g-recaptcha|h-captcha|cf-turnstile)/i.test(html) ||
+    /data-sitekey=/i.test(html) ||
+    /<iframe[^>]+(?:recaptcha|hcaptcha)/i.test(html)
+  )
   if (hasCaptcha) score -= 5
   checks.push({
     name: 'No CAPTCHA friction',

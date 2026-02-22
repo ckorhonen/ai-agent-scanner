@@ -96,7 +96,7 @@ export default function Index() {
     <div className="min-h-screen bg-gray-950 text-white">
 
       {/* ── Hero ─────────────────────────────────────────────────────────── */}
-      <div className="relative overflow-hidden">
+      <header className="relative overflow-hidden">
         {/* Background glow */}
         <div
           className="absolute inset-0 pointer-events-none"
@@ -198,8 +198,9 @@ export default function Index() {
             </div>
           </div>
         </div>
-      </div>
+      </header>
 
+      <main>
       {/* ── What is AI Agent Readiness? ─────────────────────────────────── */}
       <div className="border-t border-gray-800/60 bg-gray-900/30">
         <div className="max-w-4xl mx-auto px-4 py-16">
@@ -350,8 +351,10 @@ export default function Index() {
         </div>
       </div>
 
+      </main>
+
       {/* ── Footer ───────────────────────────────────────────────────────── */}
-      <div className="border-t border-gray-800/40 py-8 text-center text-xs text-gray-700">
+      <footer className="border-t border-gray-800/40 py-8 text-center text-xs text-gray-700">
         <p>
           AI Agent Readiness Scanner · Free, open source ·{" "}
           <a
@@ -363,7 +366,7 @@ export default function Index() {
             GitHub ↗
           </a>
         </p>
-      </div>
+      </footer>
 
     </div>
   );
