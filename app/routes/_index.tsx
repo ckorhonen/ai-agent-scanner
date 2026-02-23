@@ -366,6 +366,8 @@ export default function Index() {
           <span>·</span>
           <a href="/monitor" className="hover:text-gray-500 transition">Monitor</a>
           <span>·</span>
+          <a href="/report" className="hover:text-gray-500 transition">2026 Report</a>
+          <span>·</span>
           <span>Free, open source</span>
           <span>·</span>
           <a
