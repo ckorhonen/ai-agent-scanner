@@ -16,18 +16,20 @@ const ScanUrlSchema = z.string().url().refine((url) => {
   }
 }, { message: 'Must be a public http/https URL' });
 
-export const meta: MetaFunction<typeof loader> = ({ data, location }) => {
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export const meta: MetaFunction = ({ data, location }: { data: any; location: any }) => {
+  const typedData = data as { results?: Array<{ grade?: string; level?: { label?: string }; overall?: number }> } | undefined;
   const params = new URLSearchParams(location.search);
   const urls = params.getAll("url").filter(Boolean);
 
-  if (!data || urls.length === 0) {
+  if (!typedData || urls.length === 0) {
     return [{ title: "Scan Results — AI Agent Readiness Scanner" }];
   }
 
   let hostname = urls[0];
   try { hostname = new URL(urls[0]).hostname; } catch {}
 
-  const result = data.results?.[0];
+  const result = typedData.results?.[0];
   const grade = result?.grade ?? "?";
   const level = result?.level?.label ?? "";
   const score = result?.overall ?? 0;
@@ -318,56 +320,112 @@ function CategoryCard({ detail }: { detail: CategoryDetail }) {
 }
 
 function RecommendationCard({ rec, rank }: { rec: Recommendation; rank: number }) {
-  const [open, setOpen] = useState(false);
+  const hasDetail = (rec.issues?.length ?? 0) > 0 || (rec.steps?.length ?? 0) > 0 || !!rec.example;
+  // Top 2 open by default
+  const [open, setOpen] = useState(rank <= 2);
 
   return (
-    <div className="bg-gray-900/80 border border-gray-800 rounded-xl overflow-hidden">
+    <div className={`rounded-xl overflow-hidden border transition-colors ${
+      open ? "bg-gray-900/90 border-gray-700" : "bg-gray-900/60 border-gray-800"
+    }`}>
+      {/* Header */}
       <button
         onClick={() => setOpen(!open)}
-        className="w-full flex items-start gap-4 px-5 py-4 hover:bg-gray-800/30 transition-colors text-left"
+        className="w-full flex items-start gap-3 px-5 py-4 hover:bg-gray-800/30 transition-colors text-left"
       >
-        <div
-          className="shrink-0 w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold mt-0.5"
+        {/* Rank badge */}
+        <div className="shrink-0 w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold mt-0.5"
           style={{
-            background: rank === 1 ? "rgba(234,179,8,0.2)" : "rgba(107,114,128,0.2)",
+            background: rank === 1 ? "rgba(234,179,8,0.2)" : "rgba(107,114,128,0.15)",
             color: rank === 1 ? "#eab308" : "#6b7280",
-          }}
-        >
-          {rank === 1 ? "★" : rank}
+          }}>
+          {rank === 1 ? "⭐" : rank}
         </div>
 
         <div className="flex-1 min-w-0">
-          <div className="flex items-start justify-between gap-3 mb-1">
-            <span className="text-sm font-semibold text-white leading-snug">{rec.title}</span>
-            <span className="text-green-400 font-bold text-xs shrink-0 mt-0.5 bg-green-500/10 px-2 py-0.5 rounded-full border border-green-500/20">
+          {/* Title row */}
+          <div className="flex items-start justify-between gap-3 mb-1.5">
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="text-sm font-semibold text-white leading-snug">{rec.title}</span>
+              {rank === 1 && (
+                <span className="text-[10px] text-yellow-400 bg-yellow-500/10 border border-yellow-500/20 px-1.5 py-0.5 rounded font-bold uppercase tracking-wide">
+                  Top Fix
+                </span>
+              )}
+            </div>
+            <span className="text-green-400 font-bold text-xs shrink-0 bg-green-500/10 px-2 py-0.5 rounded-full border border-green-500/20">
               +{rec.points}pts
             </span>
           </div>
+
+          {/* Description */}
           <p className="text-xs text-gray-400 leading-relaxed mb-2">{rec.description}</p>
-          <div className="flex gap-2 flex-wrap">
+
+          {/* Pills */}
+          <div className="flex gap-1.5 flex-wrap items-center">
             <span className={`text-[10px] px-2 py-0.5 rounded-full font-semibold uppercase tracking-wider ${EFFORT_PILL[rec.effort]}`}>
               {rec.effort} effort
             </span>
             <span className={`text-[10px] px-2 py-0.5 rounded-full font-semibold uppercase tracking-wider ${IMPACT_PILL[rec.impact]}`}>
               {rec.impact} impact
             </span>
-            <span className="text-[10px] px-2 py-0.5 rounded-full font-semibold uppercase tracking-wider bg-gray-700/50 text-gray-500">
-              {rec.category}
+            <span className="text-[10px] px-2 py-0.5 rounded-full font-semibold uppercase tracking-wider bg-gray-700/40 text-gray-500">
+              {CATEGORY_ICON[rec.category]} {rec.category}
             </span>
           </div>
         </div>
 
-        {rec.example && (
-          <span className="text-gray-600 text-xs shrink-0 mt-1">{open ? "▲" : "▼"}</span>
+        {hasDetail && (
+          <span className="text-gray-600 text-[10px] shrink-0 mt-1 font-mono">{open ? "▲" : "▼"}</span>
         )}
       </button>
 
-      {open && rec.example && (
-        <div className="border-t border-gray-800 px-5 py-4 bg-gray-950/60">
-          <p className="text-[10px] text-gray-500 uppercase tracking-wider mb-2.5 font-semibold">Code example</p>
-          <pre className="text-xs text-green-300 leading-relaxed overflow-x-auto bg-gray-950 rounded-lg p-3 border border-gray-800">
-            <code>{rec.example}</code>
-          </pre>
+      {/* Expanded detail */}
+      {open && hasDetail && (
+        <div className="border-t border-gray-800/60 px-5 py-4 space-y-4 bg-gray-950/40">
+          {/* Issues found */}
+          {rec.issues && rec.issues.length > 0 && (
+            <div>
+              <p className="text-[10px] text-red-400/80 uppercase tracking-wider mb-2 font-semibold flex items-center gap-1">
+                <span>⚠</span> Issues found
+              </p>
+              <ul className="space-y-1">
+                {rec.issues.map((issue, i) => (
+                  <li key={i} className="flex items-start gap-2 text-xs text-gray-400">
+                    <span className="text-red-400/60 shrink-0 mt-0.5">•</span>
+                    <span>{issue}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+
+          {/* How to fix */}
+          {rec.steps && rec.steps.length > 0 && (
+            <div>
+              <p className="text-[10px] text-green-400/80 uppercase tracking-wider mb-2 font-semibold flex items-center gap-1">
+                <span>✓</span> How to fix
+              </p>
+              <ol className="space-y-1.5">
+                {rec.steps.map((step, i) => (
+                  <li key={i} className="flex items-start gap-2.5 text-xs text-gray-300">
+                    <span className="text-green-500/60 font-bold shrink-0 w-4 text-right mt-0.5">{i + 1}.</span>
+                    <span className="leading-relaxed">{step}</span>
+                  </li>
+                ))}
+              </ol>
+            </div>
+          )}
+
+          {/* Code example */}
+          {rec.example && (
+            <div>
+              <p className="text-[10px] text-gray-500 uppercase tracking-wider mb-2 font-semibold">Code example</p>
+              <pre className="text-xs text-green-300 leading-relaxed overflow-x-auto bg-gray-950 rounded-lg p-3 border border-gray-800 max-h-48">
+                <code>{rec.example}</code>
+              </pre>
+            </div>
+          )}
         </div>
       )}
     </div>
@@ -528,7 +586,9 @@ function NextGradeBanner({ result }: { result: ScanResult }) {
 // ── Page ──────────────────────────────────────────────────────────────────────
 
 export default function ScanResults() {
-  const { results, error, scanId, ageLabel } = useLoaderData<typeof loader>();
+  const loaderData = useLoaderData<typeof loader>();
+  const results = loaderData.results as ScanResult[];
+  const { error, scanId, ageLabel } = loaderData;
 
   if (error || results.length === 0) {
     return (
@@ -573,7 +633,7 @@ export default function ScanResults() {
 
         {/* ── Result cards ── */}
         <div className={`grid gap-8 ${!isSingle ? "lg:grid-cols-2" : "max-w-2xl mx-auto w-full"}`}>
-          {results.map((r) => {
+          {(results as ScanResult[]).map((r) => {
             let hostname = r.url
             try { hostname = new URL(r.url).hostname } catch {}
 
@@ -595,7 +655,7 @@ export default function ScanResults() {
                       <div className="flex items-center justify-between gap-4 mb-5">
                         <GradeRing score={r.overall} grade={r.grade} />
                         <div className="flex-1 space-y-2">
-                          {Object.entries(r.scores).map(([cat, val]) => {
+                          {(Object.entries(r.scores) as [string, number][]).map(([cat, val]) => {
                             const max = CATEGORY_MAX[cat] ?? 10;
                             const pct = Math.round((val / max) * 100);
                             const barColor = pct >= 75 ? "#22c55e" : pct >= 50 ? "#eab308" : "#ef4444";

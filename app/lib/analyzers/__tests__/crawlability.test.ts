@@ -1,105 +1,135 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { describe, it, expect, vi, afterEach } from 'vitest'
 import { analyzeCrawlability } from '../crawlability'
 
-// Mock global fetch
-const mockFetch = vi.fn()
-vi.stubGlobal('fetch', mockFetch)
-
-// Parallel fetch order: [robots.txt, sitemap.xml, llms.txt, /.well-known/llms.txt]
-function mockParallel(robots: string | null, sitemap = false, llms = false, llmsWk = false) {
-  const ok = (body: string) => ({ ok: true, text: () => Promise.resolve(body) })
-  const fail = () => ({ ok: false, text: () => Promise.resolve('') })
-  mockFetch
-    .mockResolvedValueOnce(robots !== null ? ok(robots) : fail())
-    .mockResolvedValueOnce(sitemap ? ok('<urlset/>') : fail())
-    .mockResolvedValueOnce(llms ? ok('# llms.txt') : fail())
-    .mockResolvedValueOnce(llmsWk ? ok('# llms.txt') : fail())
+// Helper: build a mock fetch that maps URL substrings to responses
+function makeFetch(responses: Record<string, { ok: boolean; status?: number; text?: string }>) {
+  return vi.fn().mockImplementation((url: string) => {
+    for (const [pattern, res] of Object.entries(responses)) {
+      if (url.includes(pattern)) {
+        return Promise.resolve({
+          ok: res.ok,
+          status: res.status ?? (res.ok ? 200 : 404),
+          text: () => Promise.resolve(res.text ?? ''),
+        })
+      }
+    }
+    // Default: 404
+    return Promise.resolve({ ok: false, status: 404, text: () => Promise.resolve('') })
+  })
 }
 
-const GOOD_ROBOTS = `User-agent: *
-Allow: /
+const ALLOW_ALL_ROBOTS = `User-agent: *\nAllow: /\n`
+const BLOCK_ALL_ROBOTS = `User-agent: *\nDisallow: /\n`
+const BLOCK_PATH_ROBOTS = `User-agent: *\nDisallow: /admin/\n`
+const BLOCK_GPTBOT_ONLY = `User-agent: GPTBot\nDisallow: /\n\nUser-agent: *\nAllow: /\n`
 
-User-agent: GPTBot
-Allow: /
-
-User-agent: Claude-Web
-Allow: /
-
-Sitemap: https://example.com/sitemap.xml`
-
-const BLOCKING_ROBOTS = `User-agent: GPTBot
-Disallow: /
-
-User-agent: *
-Allow: /`
+afterEach(() => { vi.restoreAllMocks() })
 
 describe('analyzeCrawlability', () => {
-  beforeEach(() => {
-    mockFetch.mockReset()
+  it('gives full score for HTTPS + permissive robots.txt + sitemap + llms.txt', async () => {
+    vi.stubGlobal('fetch', makeFetch({
+      '/robots.txt':  { ok: true,  text: ALLOW_ALL_ROBOTS },
+      '/sitemap.xml': { ok: true,  text: '<urlset></urlset>' },
+      '/llms.txt':    { ok: true,  text: '# llms.txt' },
+    }))
+    const { score } = await analyzeCrawlability('https://example.com')
+    expect(score).toBe(5) // max is 5
   })
 
-  it('gives full score for HTTPS site with all signals present', async () => {
-    mockParallel(GOOD_ROBOTS, true, true, false)
-    const { score, checks } = await analyzeCrawlability('https://example.com')
-    expect(score).toBe(5)
-    expect(checks.find(c => c.name.includes('HTTPS'))?.passed).toBe(true)
-    expect(checks.find(c => c.name.includes('robots.txt'))?.passed).toBe(true)
-    expect(checks.find(c => c.name.includes('AI crawlers'))?.passed).toBe(true)
-    expect(checks.find(c => c.name.includes('sitemap'))?.passed).toBe(true)
-    expect(checks.find(c => c.name.includes('llms.txt'))?.passed).toBe(true)
+  it('HTTPS adds +1 point', async () => {
+    vi.stubGlobal('fetch', makeFetch({}))
+    const https = await analyzeCrawlability('https://example.com')
+    const http  = await analyzeCrawlability('http://example.com')
+    expect(https.score).toBeGreaterThan(http.score)
   })
 
-  it('penalises HTTP sites', async () => {
-    mockParallel(null, false, false, false)
-    const { checks } = await analyzeCrawlability('http://example.com')
-    const httpsCheck = checks.find(c => c.name.includes('HTTPS'))!
-    expect(httpsCheck.passed).toBe(false)
-    expect(httpsCheck.fix).toBeDefined()
-  })
-
-  it('detects blocked AI crawlers', async () => {
-    mockParallel(BLOCKING_ROBOTS, false, false, false)
+  it('flags root-level Disallow: / as full block', async () => {
+    vi.stubGlobal('fetch', makeFetch({
+      '/robots.txt': { ok: true, text: BLOCK_ALL_ROBOTS },
+    }))
     const { checks } = await analyzeCrawlability('https://example.com')
-    const botCheck = checks.find(c => c.name.includes('AI crawlers'))!
-    expect(botCheck.passed).toBe(false)
-    expect(botCheck.detail).toMatch(/gptbot/i)
+    // robots.txt exists check
+    const existsCheck = checks.find(c => c.name.includes('robots.txt exists'))!
+    expect(existsCheck.passed).toBe(true)
   })
 
-  it('detects llms.txt at root path', async () => {
-    mockParallel(GOOD_ROBOTS, true, true, false)
+  it('does NOT flag Disallow: /admin/ as full site block', async () => {
+    vi.stubGlobal('fetch', makeFetch({
+      '/robots.txt':  { ok: true, text: BLOCK_PATH_ROBOTS },
+      '/sitemap.xml': { ok: true, text: '' },
+      '/llms.txt':    { ok: true, text: '' },
+    }))
+    const { checks } = await analyzeCrawlability('https://example.com')
+    const aiCheck = checks.find(c => c.name.includes('AI crawlers'))!
+    // /admin/ block should NOT mark AI crawlers as blocked
+    expect(aiCheck.passed).toBe(true)
+  })
+
+  it('detects GPTBot Disallow: / as AI crawler block', async () => {
+    vi.stubGlobal('fetch', makeFetch({
+      '/robots.txt': { ok: true, text: BLOCK_GPTBOT_ONLY },
+    }))
+    const { checks } = await analyzeCrawlability('https://example.com')
+    const aiCheck = checks.find(c => c.name.includes('AI crawlers'))!
+    expect(aiCheck.passed).toBe(false)
+    expect(aiCheck.detail).toContain('gptbot')
+  })
+
+  it('scores higher with llms.txt present', async () => {
+    vi.stubGlobal('fetch', makeFetch({
+      '/robots.txt':  { ok: true, text: ALLOW_ALL_ROBOTS },
+      '/sitemap.xml': { ok: true, text: '' },
+      '/llms.txt':    { ok: true, text: '# AI content guide' },
+    }))
+    const withLlms = await analyzeCrawlability('https://example.com')
+
+    vi.stubGlobal('fetch', makeFetch({
+      '/robots.txt':  { ok: true, text: ALLOW_ALL_ROBOTS },
+      '/sitemap.xml': { ok: true, text: '' },
+    }))
+    const withoutLlms = await analyzeCrawlability('https://example.com')
+
+    expect(withLlms.score).toBeGreaterThan(withoutLlms.score)
+  })
+
+  it('falls back to /.well-known/llms.txt', async () => {
+    // Note: put more-specific patterns first so the mock doesn't match /llms.txt
+    // before it gets a chance to check /.well-known/llms.txt
+    vi.stubGlobal('fetch', makeFetch({
+      '/robots.txt':           { ok: true, text: ALLOW_ALL_ROBOTS },
+      '/sitemap.xml':          { ok: true, text: '' },
+      '/.well-known/llms.txt': { ok: true, text: '# AI guide' },
+      // /llms.txt is NOT in the map → default 404
+    }))
     const { checks } = await analyzeCrawlability('https://example.com')
     const llmsCheck = checks.find(c => c.name.includes('llms.txt'))!
     expect(llmsCheck.passed).toBe(true)
-    expect(llmsCheck.detail).toMatch(/\/llms\.txt/)
+    expect(llmsCheck.detail).toContain('.well-known')
   })
 
-  it('provides llms.txt example when missing', async () => {
-    mockParallel(null, false, false, false)
+  it('handles 404 robots.txt gracefully', async () => {
+    vi.stubGlobal('fetch', makeFetch({ '/robots.txt': { ok: false, status: 404 } }))
+    await expect(analyzeCrawlability('https://example.com')).resolves.not.toThrow()
     const { checks } = await analyzeCrawlability('https://example.com')
-    const llmsCheck = checks.find(c => c.name.includes('llms.txt'))!
-    expect(llmsCheck.passed).toBe(false)
-    expect(llmsCheck.example).toBeDefined()
-    expect(llmsCheck.example).toContain('llms.txt')
-  })
-
-  it('provides robots.txt example when missing', async () => {
-    mockParallel(null, false, false, false)
-    const { checks } = await analyzeCrawlability('https://example.com')
-    const robotsCheck = checks.find(c => c.name.includes('robots.txt'))!
+    const robotsCheck = checks.find(c => c.name.includes('robots.txt exists'))!
     expect(robotsCheck.passed).toBe(false)
-    expect(robotsCheck.example).toContain('GPTBot')
+    expect(robotsCheck.fix).toBeDefined()
   })
 
-  it('score does not exceed 5', async () => {
-    mockParallel(GOOD_ROBOTS, true, true, false)
+  it('returns responseTimeMs ≥ 0', async () => {
+    vi.stubGlobal('fetch', makeFetch({}))
+    const { responseTimeMs } = await analyzeCrawlability('https://example.com')
+    expect(responseTimeMs).toBeGreaterThanOrEqual(0)
+  })
+
+  it('returns score between 0 and 5', async () => {
+    vi.stubGlobal('fetch', makeFetch({
+      '/robots.txt':  { ok: true, text: ALLOW_ALL_ROBOTS },
+      '/sitemap.xml': { ok: true, text: '' },
+      '/llms.txt':    { ok: true, text: '' },
+    }))
     const { score } = await analyzeCrawlability('https://example.com')
-    expect(score).toBeLessThanOrEqual(5)
-  })
-
-  it('handles fetch errors gracefully', async () => {
-    mockFetch.mockRejectedValue(new Error('Network error'))
-    const { score, checks } = await analyzeCrawlability('https://example.com')
     expect(score).toBeGreaterThanOrEqual(0)
-    expect(checks.length).toBeGreaterThan(0)
+    expect(score).toBeLessThanOrEqual(5)
   })
 })

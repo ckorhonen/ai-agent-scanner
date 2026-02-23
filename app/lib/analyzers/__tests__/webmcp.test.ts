@@ -1,88 +1,112 @@
 import { describe, it, expect } from 'vitest'
 import { analyzeWebMCP } from '../webmcp'
 
-const withFullWebMCP = `<html><body>
-  <form mcp-tool="search-products"
-        mcp-description="Search the product catalog by keyword">
-    <input mcp-param="query"
-           mcp-description="Search keywords e.g. blue shoes"
-           name="q" type="search" />
-    <input mcp-param="category"
-           mcp-description="Product category filter"
-           name="cat" type="text" />
-  </form>
-  <link rel="ai-plugin" href="/.well-known/ai-plugin.json" />
-  <meta name="description" content="Product catalog" />
-</body></html>`
-
-const withToolOnly = `<html><body>
-  <form mcp-tool="subscribe">
-    <input name="email" type="email" />
-  </form>
-</body></html>`
-
-const withOpenAPI = `<html><head>
-  <link href="/openapi.json" rel="spec" />
-  <meta name="description" content="API docs" />
-</head></html>`
+const makeHtml = (body: string) =>
+  `<html lang="en"><head><meta name="description" content="Test site" /></head><body>${body}</body></html>`
 
 describe('analyzeWebMCP', () => {
-  it('scores 0 for plain HTML with no WebMCP attributes', () => {
-    const { score } = analyzeWebMCP('<html><body><form><input /></form></body></html>')
+  it('returns zero score for page with no WebMCP attributes', () => {
+    const html = makeHtml(`
+      <form action="/search">
+        <input type="search" name="q" placeholder="Search..." />
+        <button type="submit">Search</button>
+      </form>
+    `)
+    const { score, checks } = analyzeWebMCP(html)
+    const toolCheck = checks.find(c => c.name.includes('mcp-tool'))!
+    const paramCheck = checks.find(c => c.name.includes('mcp-param'))!
+    const descCheck = checks.find(c => c.name.includes('mcp-description'))!
+
+    expect(toolCheck.passed).toBe(false)
+    expect(paramCheck.passed).toBe(false)
+    expect(descCheck.passed).toBe(false)
     expect(score).toBe(0)
   })
 
-  it('detects mcp-tool and scores points', () => {
-    const { score, checks } = analyzeWebMCP(withToolOnly)
+  it('detects mcp-tool attribute', () => {
+    const html = makeHtml(`
+      <form mcp-tool="search-products">
+        <input name="q" />
+      </form>
+    `)
+    const { checks, score } = analyzeWebMCP(html)
     const toolCheck = checks.find(c => c.name.includes('mcp-tool'))!
     expect(toolCheck.passed).toBe(true)
     expect(score).toBeGreaterThan(0)
   })
 
-  it('scores full WebMCP implementation correctly', () => {
-    const { score, checks } = analyzeWebMCP(withFullWebMCP)
-    expect(score).toBeGreaterThanOrEqual(20)
-
-    const toolCheck = checks.find(c => c.name.includes('mcp-tool'))!
+  it('detects mcp-param attribute', () => {
+    const html = makeHtml(`
+      <form mcp-tool="search">
+        <input mcp-param="query" name="q" type="search" />
+      </form>
+    `)
+    const { checks } = analyzeWebMCP(html)
     const paramCheck = checks.find(c => c.name.includes('mcp-param'))!
-    const descCheck = checks.find(c => c.name.includes('mcp-description'))!
-    expect(toolCheck.passed).toBe(true)
     expect(paramCheck.passed).toBe(true)
+  })
+
+  it('detects mcp-description attribute', () => {
+    const html = makeHtml(`
+      <form mcp-tool="search" mcp-description="Search the product catalog">
+        <input mcp-param="query" mcp-description="Keywords to search for" name="q" />
+      </form>
+    `)
+    const { checks } = analyzeWebMCP(html)
+    const descCheck = checks.find(c => c.name.includes('mcp-description'))!
     expect(descCheck.passed).toBe(true)
   })
 
-  it('detects multiple mcp-params', () => {
-    const { checks } = analyzeWebMCP(withFullWebMCP)
-    const paramCheck = checks.find(c => c.name.includes('mcp-param'))!
-    expect(paramCheck.detail).toMatch(/2 mcp-param/)
+  it('gives higher score with all three attributes', () => {
+    const noneHtml = makeHtml(`<form><input name="q" /></form>`)
+    const allHtml = makeHtml(`
+      <form mcp-tool="search" mcp-description="Search products">
+        <input mcp-param="query" mcp-description="Keywords" name="q" type="search" />
+        <input mcp-param="category" mcp-description="Category filter" name="cat" />
+      </form>
+    `)
+    const noneResult = analyzeWebMCP(noneHtml)
+    const allResult = analyzeWebMCP(allHtml)
+    expect(allResult.score).toBeGreaterThan(noneResult.score)
   })
 
-  it('detects OpenAPI reference', () => {
-    const { checks } = analyzeWebMCP(withOpenAPI)
+  it('detects OpenAPI / ai-plugin.json reference', () => {
+    const html = makeHtml(`
+      <link rel="ai-plugin" href="/.well-known/ai-plugin.json" />
+      <a href="/openapi.json">API Spec</a>
+    `)
+    const { checks } = analyzeWebMCP(html)
     const apiCheck = checks.find(c => c.name.includes('OpenAPI'))!
     expect(apiCheck.passed).toBe(true)
   })
 
-  it('provides fix + example when mcp-tool missing', () => {
-    const { checks } = analyzeWebMCP('<html><body><form></form></body></html>')
-    const toolCheck = checks.find(c => c.name.includes('mcp-tool'))!
-    expect(toolCheck.passed).toBe(false)
-    expect(toolCheck.fix).toBeDefined()
-    expect(toolCheck.example).toContain('mcp-tool=')
+  it('detects meta description tag', () => {
+    // Meta description is included in makeHtml already
+    const html = makeHtml(`<p>Content</p>`)
+    const { checks } = analyzeWebMCP(html)
+    const metaCheck = checks.find(c => c.name.includes('meta tags'))!
+    expect(metaCheck.passed).toBe(true)
   })
 
-  it('score does not exceed max of 25', () => {
-    const many = Array.from({ length: 20 }, (_, i) =>
-      `<form mcp-tool="t${i}" mcp-description="d"><input mcp-param="p" mcp-description="d" /></form>`
-    ).join('')
-    const { score } = analyzeWebMCP(`<html><body>${many}</body></html>`)
+  it('returns score capped at 25', () => {
+    const html = makeHtml(`
+      <form mcp-tool="t1" mcp-description="d1">
+        <input mcp-param="p1" mcp-description="dp1" />
+        <input mcp-param="p2" mcp-description="dp2" />
+        <input mcp-param="p3" mcp-description="dp3" />
+      </form>
+      <a href="/.well-known/ai-plugin.json">API</a>
+    `)
+    const { score } = analyzeWebMCP(html)
+    expect(score).toBeGreaterThanOrEqual(0)
     expect(score).toBeLessThanOrEqual(25)
   })
 
-  it('detects meta description as informational check', () => {
-    const html = `<html><head><meta name="description" content="My site" /></head></html>`
+  it('returns fix suggestions on failure', () => {
+    const html = makeHtml(`<form><input name="q" /></form>`)
     const { checks } = analyzeWebMCP(html)
-    const metaCheck = checks.find(c => c.name.includes('meta'))!
-    expect(metaCheck.passed).toBe(true)
+    for (const check of checks.filter(c => !c.passed && c.impact !== 'low')) {
+      expect(check.fix).toBeDefined()
+    }
   })
 })

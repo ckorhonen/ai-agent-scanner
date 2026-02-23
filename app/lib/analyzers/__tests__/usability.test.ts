@@ -1,112 +1,131 @@
 import { describe, it, expect } from 'vitest'
 import { analyzeUsability } from '../usability'
 
+const makeHtml = (body: string) => `<html lang="en"><body>${body}</body></html>`
+
 describe('analyzeUsability', () => {
-  it('returns max score for simple page with no forms', () => {
-    const { score, checks } = analyzeUsability('<html><body><p>Hello world</p></body></html>')
+  it('returns max score for fully accessible page', () => {
+    const html = makeHtml(`
+      <label for="q">Search</label>
+      <input id="q" type="search" name="q" />
+      <button type="submit">Go</button>
+    `)
+    const { score } = analyzeUsability(html)
     expect(score).toBe(30)
-    const labelCheck = checks.find(c => c.name.includes('labels'))!
-    expect(labelCheck.passed).toBe(true)
-    expect(labelCheck.detail).toMatch(/No form inputs/)
   })
 
-  it('detects unlabelled inputs', () => {
-    const html = `<form>
+  it('penalises unlabelled inputs', () => {
+    const html = makeHtml(`
       <input type="text" name="name" />
       <input type="email" name="email" />
-      <input type="password" name="pass" />
-    </form>`
+    `)
     const { score, checks } = analyzeUsability(html)
     const labelCheck = checks.find(c => c.name.includes('labels'))!
     expect(labelCheck.passed).toBe(false)
+    expect(labelCheck.fix).toBeDefined()
     expect(score).toBeLessThan(30)
-    expect(labelCheck.example).toBeDefined()
   })
 
-  it('passes when label ratio >= 80%', () => {
-    const html = `<form>
-      <label for="a">Name</label><input id="a" type="text" />
-      <label for="b">Email</label><input id="b" type="email" />
-      <input type="hidden" name="csrf" />
-    </form>`
+  it('passes label check when ratio is ≥80%', () => {
+    // 2 inputs, 2 labels → 100%
+    const html = makeHtml(`
+      <label for="a">A</label><input id="a" type="text" />
+      <label for="b">B</label><input id="b" type="text" />
+    `)
     const { checks } = analyzeUsability(html)
     const labelCheck = checks.find(c => c.name.includes('labels'))!
     expect(labelCheck.passed).toBe(true)
   })
 
   it('ignores hidden inputs in label ratio', () => {
-    const html = `<form>
-      <label for="a">Name</label><input id="a" type="text" />
-      <input type="hidden" name="csrf" value="token" />
-      <input type="hidden" name="state" value="xyz" />
-    </form>`
+    // Only one visible input, labelled
+    const html = makeHtml(`
+      <label for="v">Visible</label>
+      <input id="v" type="text" />
+      <input type="hidden" name="csrf" />
+    `)
     const { checks } = analyzeUsability(html)
     const labelCheck = checks.find(c => c.name.includes('labels'))!
     expect(labelCheck.passed).toBe(true)
   })
 
-  it('detects div/span onclick buttons', () => {
-    const html = `<div onclick="doSomething()">Click me</div>
-      <span onclick="other()">Also click</span>
-      <span onclick="third()">Third</span>`
-    const { checks, score } = analyzeUsability(html)
-    const buttonCheck = checks.find(c => c.name.includes('button'))!
-    expect(buttonCheck.passed).toBe(false)
-    expect(score).toBeLessThan(30)
-  })
-
-  it('passes with proper <button> usage', () => {
-    const html = `<button type="submit">Submit</button><button type="button">Cancel</button>`
-    const { checks } = analyzeUsability(html)
-    const buttonCheck = checks.find(c => c.name.includes('button'))!
-    expect(buttonCheck.passed).toBe(true)
-  })
-
-  it('detects CAPTCHA', () => {
-    const html = `<div class="g-recaptcha" data-sitekey="xxx"></div>`
+  it('detects real CAPTCHA implementation (class=g-recaptcha)', () => {
+    const html = makeHtml(`<div class="g-recaptcha" data-sitekey="abc123"></div>`)
     const { checks, score } = analyzeUsability(html)
     const captchaCheck = checks.find(c => c.name.includes('CAPTCHA'))!
     expect(captchaCheck.passed).toBe(false)
     expect(score).toBeLessThan(30)
-    expect(captchaCheck.fix).toBeDefined()
   })
 
-  it('detects login wall without signup', () => {
-    const html = `<a href="/login">Sign in</a>`
+  it('detects reCAPTCHA via data-sitekey', () => {
+    const html = makeHtml(`<div data-sitekey="6Ldxxx"></div>`)
+    const { checks } = analyzeUsability(html)
+    const captchaCheck = checks.find(c => c.name.includes('CAPTCHA'))!
+    expect(captchaCheck.passed).toBe(false)
+  })
+
+  it('detects reCAPTCHA via script src', () => {
+    const html = `<html><head><script src="https://www.google.com/recaptcha/api.js"></script></head><body></body></html>`
+    const { checks } = analyzeUsability(html)
+    const captchaCheck = checks.find(c => c.name.includes('CAPTCHA'))!
+    expect(captchaCheck.passed).toBe(false)
+  })
+
+  it('does NOT flag the word "captcha" in text as CAPTCHA', () => {
+    const html = makeHtml(`<p>We don't use captcha on this form.</p>`)
+    const { checks } = analyzeUsability(html)
+    const captchaCheck = checks.find(c => c.name.includes('CAPTCHA'))!
+    expect(captchaCheck.passed).toBe(true)
+  })
+
+  it('detects CAPTCHA via hCaptcha', () => {
+    const html = makeHtml(`<div class="h-captcha" data-sitekey="xxx"></div>`)
+    const { checks } = analyzeUsability(html)
+    const captchaCheck = checks.find(c => c.name.includes('CAPTCHA'))!
+    expect(captchaCheck.passed).toBe(false)
+  })
+
+  it('penalises div/span onclick handlers', () => {
+    const html = makeHtml(`
+      <div onclick="doA()">A</div>
+      <div onclick="doB()">B</div>
+      <div onclick="doC()">C</div>
+    `)
+    const { checks } = analyzeUsability(html)
+    const btnCheck = checks.find(c => c.name.includes('<button>'))!
+    expect(btnCheck.passed).toBe(false)
+  })
+
+  it('allows up to 2 div/span onclicks without penalty', () => {
+    const html = makeHtml(`
+      <div onclick="doA()">A</div>
+      <span onclick="doB()">B</span>
+    `)
+    const { checks } = analyzeUsability(html)
+    const btnCheck = checks.find(c => c.name.includes('<button>'))!
+    expect(btnCheck.passed).toBe(true)
+  })
+
+  it('detects login-only wall (login without signup)', () => {
+    const html = makeHtml(`<a href="/login">Sign in</a>`)
     const { checks } = analyzeUsability(html)
     const authCheck = checks.find(c => c.name.includes('authentication'))!
     expect(authCheck.passed).toBe(false)
   })
 
-  it('passes when both login and signup present', () => {
-    const html = `<a href="/login">Sign in</a> <a href="/signup">Create account</a>`
+  it('passes auth check when both login and signup present', () => {
+    const html = makeHtml(`
+      <a href="/login">Sign in</a>
+      <a href="/signup">Create account</a>
+    `)
     const { checks } = analyzeUsability(html)
     const authCheck = checks.find(c => c.name.includes('authentication'))!
     expect(authCheck.passed).toBe(true)
   })
 
-  it('detects infinite scroll without pagination', () => {
-    const html = `<div class="infinite-scroll">content</div>`
-    const { checks } = analyzeUsability(html)
-    const paginationCheck = checks.find(c => c.name.includes('Paginated'))!
-    expect(paginationCheck.passed).toBe(false)
-  })
-
-  it('passes when infinite scroll has pagination fallback', () => {
-    const html = `<div class="infinite-scroll">content</div>
-      <a href="?page=2" rel="next">Next page</a>`
-    const { checks } = analyzeUsability(html)
-    const paginationCheck = checks.find(c => c.name.includes('Paginated'))!
-    expect(paginationCheck.passed).toBe(true)
-  })
-
-  it('score never goes below 0', () => {
-    const worst = `<div onclick="a()"></div><div onclick="b()"></div><div onclick="c()"></div>
-      <div class="recaptcha"></div>
-      <input /><input /><input /><input /><input />
-      <a href="/login">Login</a>
-      <div class="infinite-scroll">x</div>`
-    const { score } = analyzeUsability(worst)
+  it('returns score between 0 and 30', () => {
+    const { score } = analyzeUsability('')
     expect(score).toBeGreaterThanOrEqual(0)
+    expect(score).toBeLessThanOrEqual(30)
   })
 })

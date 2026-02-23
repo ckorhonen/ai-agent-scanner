@@ -103,7 +103,7 @@ describe('generateRecommendations', () => {
     expect(recs.length).toBeLessThanOrEqual(8)
   })
 
-  it('each recommendation has required fields', () => {
+  it('each recommendation has required fields including issues and steps', () => {
     const recs = generateRecommendations(badScores, emptyDetails)
     recs.forEach(rec => {
       expect(rec.title).toBeTruthy()
@@ -112,6 +112,11 @@ describe('generateRecommendations', () => {
       expect(typeof rec.points).toBe('number')
       expect(['high', 'medium', 'low']).toContain(rec.impact)
       expect(['low', 'medium', 'high']).toContain(rec.effort)
+      // New fields: issues[] and steps[] must be arrays
+      expect(Array.isArray(rec.issues)).toBe(true)
+      expect(Array.isArray(rec.steps)).toBe(true)
+      // Each rec should have at least 1 step
+      expect(rec.steps.length).toBeGreaterThan(0)
     })
   })
 
