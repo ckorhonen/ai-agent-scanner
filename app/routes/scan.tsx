@@ -619,6 +619,26 @@ export default function ScanResults() {
                       </div>
                     )}
 
+                    {/* Badge embed */}
+                    {isSingle && (
+                      <div className="rounded-xl border border-gray-800 p-5 text-xs space-y-3">
+                        <p className="font-semibold text-gray-400 text-sm">🏷️ Embed badge</p>
+                        <p className="text-gray-500">Add this to your README or site to show your AI agent readiness score:</p>
+                        <div className="space-y-2">
+                          <p className="text-gray-600 uppercase tracking-wide text-[10px] font-medium">Markdown</p>
+                          <div className="bg-gray-900 rounded-lg p-3 font-mono text-gray-300 text-[11px] break-all select-all">
+                            {`![AI Readiness: ${results[0].overall}/100](https://scanner.v1be.codes/badge/${(() => { try { return new URL(results[0].url).hostname } catch { return results[0].url } })()})`}
+                          </div>
+                        </div>
+                        <div className="space-y-2">
+                          <p className="text-gray-600 uppercase tracking-wide text-[10px] font-medium">HTML</p>
+                          <div className="bg-gray-900 rounded-lg p-3 font-mono text-gray-300 text-[11px] break-all select-all">
+                            {`<img src="https://scanner.v1be.codes/badge/${(() => { try { return new URL(results[0].url).hostname } catch { return results[0].url } })()}" alt="AI Readiness: ${results[0].overall}/100">`}
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
                     {/* Educational footer */}
                     <div className="rounded-xl border border-gray-800 p-5 text-xs text-gray-500 space-y-2">
                       <p className="font-semibold text-gray-400">📖 Learn more</p>
