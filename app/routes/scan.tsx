@@ -61,6 +61,16 @@ export async function loader({ request, context }: LoaderFunctionArgs) {
   const scanId = url.searchParams.get("id");
   if (scanId) {
     try {
+      // Try D1 first
+      const db = context?.cloudflare?.env?.DB as D1Database | undefined;
+      if (db) {
+        const { getScanFromDb } = await import('../lib/db');
+        const result = await getScanFromDb(db, scanId);
+        if (result) {
+          return json({ results: [result], error: null, scanId, ageLabel: 'cached' });
+        }
+      }
+      // Fallback: KV
       const kv = context?.cloudflare?.env?.SCAN_KV as KVNamespace | undefined;
       if (kv) {
         const { loadScan } = await import('../lib/scan-store');
@@ -106,13 +116,25 @@ export async function loader({ request, context }: LoaderFunctionArgs) {
 
   const results = await Promise.all(validUrls.map((u) => scanUrl(u)));
 
-  // ── Persist results to KV ─────────────────────────────────────────────────
+  // ── Persist results to D1 (primary) + KV (fallback/cache) ────────────────
   let newScanId: string | null = null;
   try {
-    const kv = context?.cloudflare?.env?.SCAN_KV as KVNamespace | undefined;
-    if (kv) {
-      const { saveScan } = await import('../lib/scan-store');
-      newScanId = await saveScan(kv, results);
+    const db = context?.cloudflare?.env?.DB as D1Database | undefined;
+    if (db) {
+      // Write first result to D1 for leaderboard (use first URL for multi-scan)
+      const { saveScanToDb } = await import('../lib/db');
+      newScanId = await saveScanToDb(db, results[0]);
+      // Write remaining results if multi-scan
+      for (let i = 1; i < results.length; i++) {
+        await saveScanToDb(db, results[i]).catch(() => {});
+      }
+    } else {
+      // Fallback: KV only
+      const kv = context?.cloudflare?.env?.SCAN_KV as KVNamespace | undefined;
+      if (kv) {
+        const { saveScan } = await import('../lib/scan-store');
+        newScanId = await saveScan(kv, results);
+      }
     }
   } catch { /* non-fatal — scan still works without persistence */ }
 

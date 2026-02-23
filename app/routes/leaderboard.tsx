@@ -1,5 +1,7 @@
-import type { MetaFunction } from '@remix-run/cloudflare'
-import { Link } from '@remix-run/react'
+import type { MetaFunction, LoaderFunctionArgs } from '@remix-run/cloudflare'
+import { json } from '@remix-run/cloudflare'
+import { Link, useLoaderData } from '@remix-run/react'
+import type { LeaderboardEntry } from '~/lib/db'
 
 export const meta: MetaFunction = () => [
   { title: 'AI Agent Readiness Leaderboard — scanner.v1be.codes' },
@@ -31,8 +33,24 @@ const LEVEL_EMOJI: Record<number, string> = {
   1: '🔴', 2: '🟠', 3: '🟡', 4: '🟢', 5: '🔵',
 }
 
-// Seeded data — updated Feb 22, 2026
-// These are real scan results from scanner.v1be.codes
+// ── Loader: pull from D1, fall back to seed data ──────────────────────────
+
+export async function loader({ context }: LoaderFunctionArgs) {
+  try {
+    const db = context?.cloudflare?.env?.DB as D1Database | undefined
+    if (db) {
+      const { getLeaderboard } = await import('~/lib/db')
+      const entries = await getLeaderboard(db, 50)
+      if (entries.length > 0) {
+        return json({ entries, source: 'live' as const, totalScans: entries.length })
+      }
+    }
+  } catch { /* fall through to seed data */ }
+  return json({ entries: [] as LeaderboardEntry[], source: 'seed' as const, totalScans: 0 })
+}
+
+// ── Seed data — shown until real D1 data exists ───────────────────────────
+// These are real scan results from scanner.v1be.codes (Feb 22, 2026)
 const LEADERBOARD: SiteEntry[] = [
   { domain: 'stripe.com',          score: 63, grade: 'C', level: 4, levelName: 'Operable',      category: 'Payments',       notes: 'Has llms.txt ✓',      scannedAt: '2026-02-22' },
   { domain: 'scanner.v1be.codes',  score: 62, grade: 'C', level: 4, levelName: 'Operable',      category: 'Developer Tools', notes: 'WebMCP pending',      scannedAt: '2026-02-22' },
@@ -42,9 +60,6 @@ const LEADERBOARD: SiteEntry[] = [
   { domain: 'linear.app',          score: 46, grade: 'D', level: 3, levelName: 'Discoverable',  category: 'Productivity',   notes: 'Has llms.txt ✓',      scannedAt: '2026-02-22' },
   { domain: 'github.com',          score: 38, grade: 'F', level: 2, levelName: 'Crawlable',     category: 'Developer Tools', notes: 'Rejects llms.txt (406)', scannedAt: '2026-02-22' },
 ]
-
-const SHAME_LIST = LEADERBOARD.filter(s => s.score < 50).sort((a, b) => a.score - b.score)
-const TOP_LIST   = LEADERBOARD.filter(s => s.score >= 50).sort((a, b) => b.score - a.score)
 
 function ScoreBar({ score }: { score: number }) {
   const width = `${score}%`
@@ -96,6 +111,26 @@ function SiteRow({ entry, rank }: { entry: SiteEntry; rank: number }) {
 }
 
 export default function Leaderboard() {
+  const { entries, source, totalScans } = useLoaderData<typeof loader>()
+
+  // Merge D1 entries with seed data:
+  // — If D1 has data, use it (plus any seed entries not yet in D1)
+  // — If D1 is empty, show seed data
+  const liveEntries: SiteEntry[] = source === 'live' && entries.length > 0
+    ? entries.map(e => ({
+        domain: e.domain,
+        score: e.score,
+        grade: e.grade as SiteEntry['grade'],
+        level: e.level,
+        levelName: e.level_name,
+        category: '',  // not stored in D1 yet
+        scannedAt: new Date(e.updated_at).toISOString().slice(0, 10),
+      }))
+    : LEADERBOARD
+
+  const topList   = [...liveEntries].sort((a, b) => b.score - a.score).filter(s => s.score >= 50)
+  const shameList = [...liveEntries].sort((a, b) => a.score - b.score).filter(s => s.score < 50)
+
   return (
     <div className="min-h-screen bg-gray-950 text-white">
       <div className="max-w-3xl mx-auto px-4 py-16">
@@ -115,17 +150,22 @@ export default function Leaderboard() {
             How well do the web&rsquo;s top sites work with AI agents?
             Scores based on WebMCP support, semantic HTML, structured data, and agent usability.
           </p>
-          <p className="text-gray-600 text-xs mt-3">Last updated Feb 22, 2026 · WebMCP adoption: 0% across all sites</p>
+          <p className="text-gray-600 text-xs mt-3">
+            {source === 'live'
+              ? `${totalScans} unique domains scanned · live data · WebMCP adoption: 0%`
+              : 'Seeded with real scan data · Feb 22, 2026 · WebMCP adoption: 0%'
+            }
+          </p>
         </div>
 
         {/* Top performers */}
         <section className="mb-12">
           <div className="flex items-center gap-3 mb-4">
             <h2 className="text-lg font-bold">🏆 Top Performers</h2>
-            <span className="text-xs text-gray-600 bg-gray-800 px-2 py-0.5 rounded-full">{TOP_LIST.length} sites</span>
+            <span className="text-xs text-gray-600 bg-gray-800 px-2 py-0.5 rounded-full">{topList.length} sites</span>
           </div>
           <div className="space-y-3">
-            {TOP_LIST.map((entry, i) => (
+            {topList.map((entry, i) => (
               <SiteRow key={entry.domain} entry={entry} rank={i + 1} />
             ))}
           </div>
@@ -138,7 +178,7 @@ export default function Leaderboard() {
             <span className="text-xs text-gray-600 bg-gray-800 px-2 py-0.5 rounded-full">Notable underperformers</span>
           </div>
           <div className="space-y-3">
-            {SHAME_LIST.map((entry, i) => (
+            {shameList.map((entry, i) => (
               <SiteRow key={entry.domain} entry={entry} rank={i + 1} />
             ))}
           </div>
@@ -150,9 +190,9 @@ export default function Leaderboard() {
         {/* Stats strip */}
         <section className="grid grid-cols-3 gap-4 mb-12">
           {[
-            { label: 'Average score', value: `${Math.round(LEADERBOARD.reduce((s, e) => s + e.score, 0) / LEADERBOARD.length)}/100` },
+            { label: 'Average score', value: `${Math.round(liveEntries.reduce((s, e) => s + e.score, 0) / (liveEntries.length || 1))}/100` },
             { label: 'WebMCP adoption', value: '0%' },
-            { label: 'Sites at Grade C+', value: `${LEADERBOARD.filter(e => e.score >= 60).length}/${LEADERBOARD.length}` },
+            { label: 'Sites at Grade C+', value: `${liveEntries.filter(e => e.score >= 60).length}/${liveEntries.length}` },
           ].map(stat => (
             <div key={stat.label} className="rounded-xl border border-gray-800 p-4 text-center">
               <div className="text-2xl font-black text-white mb-1">{stat.value}</div>
