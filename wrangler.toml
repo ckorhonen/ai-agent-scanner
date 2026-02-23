@@ -4,13 +4,15 @@ compatibility_flags = ["nodejs_compat"]
 pages_build_output_dir = "build/client"
 
 # ── D1 database — leaderboard + persistent scan URLs ─────────────────────────
+# DISABLED until database_id is known. The app falls back to KV gracefully.
 # To enable:
-#   1. npx wrangler@4 d1 create scanner-results
-#   2. Copy the database_id from the output and replace REPLACE_WITH_DB_ID below
+#   1. npx wrangler@4 d1 create scanner-results  → copy the UUID
+#   2. Uncomment block below, paste UUID
 #   3. npx wrangler@4 d1 execute scanner-results --file=migrations/0001_init.sql
-#   4. Re-deploy: npm run deploy (or the full wrangler pages deploy command)
-#   5. Add DB binding in Cloudflare dashboard → Pages → ai-agent-scanner → Settings → Bindings
-[[d1_databases]]
-binding = "DB"
-database_name = "scanner-results"
-database_id = "REPLACE_WITH_DB_ID"
+#   4. npm run deploy
+#   5. Add DB binding in CF dashboard → Pages → ai-agent-scanner → Settings → Bindings
+#
+# [[d1_databases]]
+# binding = "DB"
+# database_name = "scanner-results"
+# database_id = "PASTE_UUID_HERE"
