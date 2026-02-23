@@ -52,8 +52,30 @@ export const meta: MetaFunction<typeof loader> = ({ data, location }) => {
 import { scanUrl } from "~/lib/scanner";
 import type { ScanResult, CategoryDetail, CheckResult, Recommendation, ReadinessLevel } from "~/lib/types";
 
-export async function loader({ request }: LoaderFunctionArgs) {
+export async function loader({ request, context }: LoaderFunctionArgs) {
   const url = new URL(request.url);
+
+  // ── Load persisted scan by ID ────────────────────────────────────────────
+  const scanId = url.searchParams.get("id");
+  if (scanId) {
+    try {
+      const kv = context?.cloudflare?.env?.SCAN_KV as KVNamespace | undefined;
+      if (kv) {
+        const { loadScan } = await import('../lib/scan-store');
+        const stored = await loadScan(kv, scanId);
+        if (stored) {
+          const ageMs = Date.now() - stored.createdAt;
+          const ageLabel = ageMs < 60_000 ? 'just now'
+            : ageMs < 3_600_000 ? `${Math.round(ageMs / 60_000)}m ago`
+            : ageMs < 86_400_000 ? `${Math.round(ageMs / 3_600_000)}h ago`
+            : `${Math.round(ageMs / 86_400_000)}d ago`;
+          return json({ results: stored.results, error: null, scanId, ageLabel });
+        }
+      }
+    } catch { /* fall through to fresh scan */ }
+  }
+
+  // ── Fresh scan ────────────────────────────────────────────────────────────
   const rawUrls = url.searchParams
     .getAll("url")
     .map((u) => u.trim())
@@ -61,7 +83,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
     .slice(0, 4);
 
   if (rawUrls.length === 0) {
-    return json({ results: [] as ScanResult[], error: "No URLs provided" });
+    return json({ results: [] as ScanResult[], error: "No URLs provided", scanId: null, ageLabel: null });
   }
 
   // Validate each URL
@@ -77,11 +99,22 @@ export async function loader({ request }: LoaderFunctionArgs) {
   }
 
   if (validUrls.length === 0) {
-    return json({ results: [] as ScanResult[], error: `Invalid URL(s): ${validationErrors.join('; ')}` });
+    return json({ results: [] as ScanResult[], error: `Invalid URL(s): ${validationErrors.join('; ')}`, scanId: null, ageLabel: null });
   }
 
   const results = await Promise.all(validUrls.map((u) => scanUrl(u)));
-  return json({ results, error: null });
+
+  // ── Persist results to KV ─────────────────────────────────────────────────
+  let newScanId: string | null = null;
+  try {
+    const kv = context?.cloudflare?.env?.SCAN_KV as KVNamespace | undefined;
+    if (kv) {
+      const { saveScan } = await import('../lib/scan-store');
+      newScanId = await saveScan(kv, results);
+    }
+  } catch { /* non-fatal — scan still works without persistence */ }
+
+  return json({ results, error: null, scanId: newScanId, ageLabel: null });
 }
 
 // ── Constants ─────────────────────────────────────────────────────────────────
@@ -421,6 +454,19 @@ function ComparisonTable({ results }: { results: ScanResult[] }) {
   );
 }
 
+function PersistentLinkButton({ scanId }: { scanId: string }) {
+  const [copied, setCopied] = useState(false);
+  const url = `https://scanner.v1be.codes/scan?id=${scanId}`;
+  return (
+    <button
+      onClick={() => { navigator.clipboard.writeText(url).catch(() => {}); setCopied(true); setTimeout(() => setCopied(false), 2000); }}
+      className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-purple-500/10 border border-purple-500/20 text-purple-400 hover:bg-purple-500/20 transition text-xs font-medium"
+    >
+      {copied ? "✓ Copied!" : "🔗 Shareable link"}
+    </button>
+  );
+}
+
 function ShareButton() {
   const [copied, setCopied] = useState(false);
 
@@ -482,7 +528,7 @@ function NextGradeBanner({ result }: { result: ScanResult }) {
 // ── Page ──────────────────────────────────────────────────────────────────────
 
 export default function ScanResults() {
-  const { results, error } = useLoaderData<typeof loader>();
+  const { results, error, scanId, ageLabel } = useLoaderData<typeof loader>();
 
   if (error || results.length === 0) {
     return (
@@ -509,12 +555,18 @@ export default function ScanResults() {
           <Link to="/" className="flex items-center gap-1.5 text-gray-400 hover:text-white text-sm transition-colors">
             <span>←</span> <span>New scan</span>
           </Link>
-          <div className="flex items-center gap-2">
-            <span className="text-xs text-gray-600">
-              {new Date(results[0].timestamp).toLocaleString(undefined, {
-                month: "short", day: "numeric", hour: "2-digit", minute: "2-digit"
-              })}
-            </span>
+          <div className="flex items-center gap-2 flex-wrap">
+            {ageLabel && (
+              <span className="text-xs text-gray-600">Cached · {ageLabel}</span>
+            )}
+            {!ageLabel && (
+              <span className="text-xs text-gray-600">
+                {new Date(results[0].timestamp).toLocaleString(undefined, {
+                  month: "short", day: "numeric", hour: "2-digit", minute: "2-digit"
+                })}
+              </span>
+            )}
+            {scanId && <PersistentLinkButton scanId={scanId} />}
             <ShareButton />
           </div>
         </div>
