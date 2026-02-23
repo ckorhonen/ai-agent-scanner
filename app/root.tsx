@@ -85,6 +85,18 @@ export function Layout({ children }: { children: React.ReactNode }) {
           "target": "https://scanner.v1be.codes/scan?url={url}",
           "query-input": "required name=url"
         }
+      },
+      {
+        "@type": "Organization",
+        "@id": "https://scanner.v1be.codes/#org",
+        "name": "AI Agent Readiness Scanner",
+        "url": "https://scanner.v1be.codes",
+        "sameAs": ["https://github.com/ckorhonen/ai-agent-scanner"],
+        "founder": {
+          "@type": "Person",
+          "name": "Chris Korhonen",
+          "url": "https://chris.v1be.codes"
+        }
       }
     ]
   }

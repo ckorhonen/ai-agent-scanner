@@ -53,7 +53,7 @@ export async function loader({ context }: LoaderFunctionArgs) {
 // These are real scan results from scanner.v1be.codes (Feb 22, 2026)
 const LEADERBOARD: SiteEntry[] = [
   { domain: 'stripe.com',          score: 63, grade: 'C', level: 4, levelName: 'Operable',      category: 'Payments',       notes: 'Has llms.txt ✓',      scannedAt: '2026-02-22' },
-  { domain: 'scanner.v1be.codes',  score: 84, grade: 'B', level: 5, levelName: 'AI-Native',      category: 'Developer Tools', notes: '44→84 in one weekend ✓', scannedAt: '2026-02-23' },
+  { domain: 'scanner.v1be.codes',  score: 92, grade: 'A', level: 5, levelName: 'AI-Native',      category: 'Developer Tools', notes: '44→92 in one weekend 🏆', scannedAt: '2026-02-23' },
   { domain: 'anthropic.com',       score: 56, grade: 'D', level: 3, levelName: 'Discoverable',  category: 'AI',             notes: 'No WebMCP, no JSON-LD', scannedAt: '2026-02-22' },
   { domain: 'openai.com',          score: 53, grade: 'D', level: 3, levelName: 'Discoverable',  category: 'AI',             notes: 'No llms.txt (ironic)', scannedAt: '2026-02-22' },
   { domain: 'vercel.com',          score: 48, grade: 'D', level: 3, levelName: 'Discoverable',  category: 'Developer Tools', notes: 'Has llms.txt ✓',     scannedAt: '2026-02-22' },

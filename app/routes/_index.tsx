@@ -125,6 +125,7 @@ export default function Index() {
 
           {/* Scan form */}
           <Form method="GET" action="/scan" className="w-full max-w-xl mx-auto text-left space-y-3"
+            aria-label="Scan a website for AI agent readiness"
             {...{"mcp-tool": "scan-website", "mcp-description": "Scan any URL for AI agent readiness. Returns a score (0–100), grade (A–F), and prioritized list of actionable fixes."}}>
             <div>
               <label htmlFor="url0" className="block text-sm text-gray-400 mb-1.5 font-medium">
@@ -202,8 +203,9 @@ export default function Index() {
         </div>
       </header>
 
-      <main>
+      <main aria-label="AI agent readiness scanner">
       {/* ── What is AI Agent Readiness? ─────────────────────────────────── */}
+      <section aria-label="About AI agent readiness">
       <div className="border-t border-gray-800/60 bg-gray-900/30">
         <div className="max-w-4xl mx-auto px-4 py-16">
           <div className="text-center mb-12">
@@ -244,7 +246,9 @@ export default function Index() {
         </div>
       </div>
 
+      </section>
       {/* ── 5 Levels ─────────────────────────────────────────────────────── */}
+      <section aria-label="Readiness levels">
       <div className="border-t border-gray-800/60">
         <div className="max-w-4xl mx-auto px-4 py-16">
           <div className="text-center mb-12">
@@ -287,6 +291,7 @@ export default function Index() {
         </div>
       </div>
 
+      </section>
       {/* ── What We Check ────────────────────────────────────────────────── */}
       <div className="border-t border-gray-800/60 bg-gray-900/30">
         <div className="max-w-4xl mx-auto px-4 py-16">
@@ -359,17 +364,17 @@ export default function Index() {
 
       {/* ── Footer ───────────────────────────────────────────────────────── */}
       <footer className="border-t border-gray-800/40 py-8 text-center text-xs text-gray-700">
-        <p className="flex items-center justify-center gap-3 flex-wrap">
+        <nav aria-label="Site navigation" className="flex items-center justify-center gap-3 flex-wrap mb-2">
           <span>AI Agent Readiness Scanner</span>
-          <span>·</span>
+          <span aria-hidden="true">·</span>
           <a href="/leaderboard" className="hover:text-gray-500 transition">Leaderboard</a>
-          <span>·</span>
+          <span aria-hidden="true">·</span>
           <a href="/monitor" className="hover:text-gray-500 transition">Monitor</a>
-          <span>·</span>
+          <span aria-hidden="true">·</span>
           <a href="/report" className="hover:text-gray-500 transition">2026 Report</a>
-          <span>·</span>
-          <span>Free, open source</span>
-          <span>·</span>
+          <span aria-hidden="true">·</span>
+          <a href="/api/v1/scan" className="hover:text-gray-500 transition">JSON API</a>
+          <span aria-hidden="true">·</span>
           <a
             href="https://github.com/ckorhonen/ai-agent-scanner"
             target="_blank"
@@ -378,7 +383,7 @@ export default function Index() {
           >
             GitHub ↗
           </a>
-        </p>
+        </nav>
       </footer>
 
     </div>
