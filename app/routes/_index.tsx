@@ -124,7 +124,8 @@ export default function Index() {
           </p>
 
           {/* Scan form */}
-          <Form method="GET" action="/scan" className="w-full max-w-xl mx-auto text-left space-y-3">
+          <Form method="GET" action="/scan" className="w-full max-w-xl mx-auto text-left space-y-3"
+            {...{"mcp-tool": "scan-website", "mcp-description": "Scan any URL for AI agent readiness. Returns a score (0–100), grade (A–F), and prioritized list of actionable fixes."}}>
             <div>
               <label htmlFor="url0" className="block text-sm text-gray-400 mb-1.5 font-medium">
                 Your website <span className="text-red-400">*</span>
@@ -132,6 +133,7 @@ export default function Index() {
               <input
                 id="url0" name="url" type="url" required
                 placeholder="https://example.com"
+                {...{"mcp-param": "url", "mcp-description": "The website URL to scan (must include https://)"}}
                 value={urls[0]}
                 onChange={e => setUrl(0, e.target.value)}
                 className="w-full px-4 py-3 bg-gray-900 border border-gray-700 rounded-xl text-white placeholder-gray-600 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500/30 transition text-sm"
@@ -333,12 +335,14 @@ export default function Index() {
           <p className="text-gray-500 text-sm mb-8">
             Free, no login required. Results in under 10 seconds.
           </p>
-          <Form method="GET" action="/scan" className="flex gap-2">
+          <Form method="GET" action="/scan" className="flex gap-2"
+            {...{"mcp-tool": "scan-website", "mcp-description": "Scan any URL for AI agent readiness. Returns a score (0–100), grade (A–F), and prioritized list of actionable fixes."}}>
             <label htmlFor="url-cta" className="sr-only">Website URL to scan</label>
             <input
               id="url-cta"
               name="url" type="url" required
               placeholder="https://yoursite.com"
+              {...{"mcp-param": "url", "mcp-description": "The website URL to scan (must include https://)"}}
               className="flex-1 px-4 py-3 bg-gray-900 border border-gray-700 rounded-xl text-white placeholder-gray-600 focus:outline-none focus:border-blue-500 transition text-sm"
             />
             <button
@@ -355,8 +359,13 @@ export default function Index() {
 
       {/* ── Footer ───────────────────────────────────────────────────────── */}
       <footer className="border-t border-gray-800/40 py-8 text-center text-xs text-gray-700">
-        <p>
-          AI Agent Readiness Scanner · Free, open source ·{" "}
+        <p className="flex items-center justify-center gap-3 flex-wrap">
+          <span>AI Agent Readiness Scanner</span>
+          <span>·</span>
+          <a href="/leaderboard" className="hover:text-gray-500 transition">Leaderboard</a>
+          <span>·</span>
+          <span>Free, open source</span>
+          <span>·</span>
           <a
             href="https://github.com/ckorhonen/ai-agent-scanner"
             target="_blank"
