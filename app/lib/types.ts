@@ -10,6 +10,9 @@ export interface ScanResult {
   categoryDetails: CategoryDetail[]
   responseTimeMs?: number
   error?: string
+  /** True when the page appears to be a client-side-rendered SPA (React/Vue/Angular).
+   *  Scores may be artificially low — the real DOM is populated by JavaScript. */
+  jsBased?: boolean
 }
 
 export interface CategoryScores {

@@ -696,6 +696,22 @@ export default function ScanResults() {
                       <div className="bg-gray-800/40 rounded-lg p-3 border border-gray-700/50">
                         <p className="text-xs text-gray-300 leading-relaxed">{r.summary}</p>
                       </div>
+
+                      {/* SPA / JS-rendering warning */}
+                      {r.jsBased && (
+                        <div className="flex items-start gap-2.5 rounded-lg p-3 bg-yellow-500/8 border border-yellow-500/20 text-xs text-yellow-300">
+                          <span className="shrink-0 mt-0.5">⚡</span>
+                          <span>
+                            <strong className="font-semibold">JavaScript-rendered site detected.</strong>
+                            {" "}This page renders its content via React/Vue/Angular — the scan sees the pre-hydration HTML, which may undercount semantic landmarks, structured data, and text. Your real score could be higher.
+                            {" "}<a href="https://github.com/ckorhonen/ai-agent-scanner/issues/24"
+                              target="_blank" rel="noopener noreferrer"
+                              className="underline underline-offset-2 text-yellow-400 hover:text-yellow-200">
+                              Full JS rendering is tracked in issue #24
+                            </a>.
+                          </span>
+                        </div>
+                      )}
                     </>
                   )}
                 </div>

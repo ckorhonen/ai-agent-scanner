@@ -125,5 +125,36 @@ export async function scanUrl(url: string): Promise<ScanResult> {
   const recommendations = generateRecommendations(scores, categoryDetails)
   const summary         = generateSummary(url, overall, level, scores, categoryDetails)
 
-  return { url, timestamp, scores, overall, grade, level, summary, recommendations, categoryDetails, responseTimeMs }
+  // ── SPA / JS-rendered detection ──────────────────────────────────────────
+  // If the page looks like a client-side SPA, the scan results may undercount
+  // actual content (which is rendered by JavaScript, not present in raw HTML).
+  const jsBased = detectSpa(html)
+
+  return { url, timestamp, scores, overall, grade, level, summary, recommendations, categoryDetails, responseTimeMs, jsBased }
+}
+
+/** Heuristic SPA detection: returns true if the page is likely a JS-rendered app */
+function detectSpa(html: string): boolean {
+  if (!html) return false
+  // Common SPA root element patterns
+  const spaRoots = [
+    /<div\s+id=["']root["']/i,          // React CRA
+    /<div\s+id=["']app["']/i,           // Vue CLI
+    /<div\s+id=["']__next["']/i,        // Next.js pre-render gap
+    /data-reactroot/i,                   // React class legacy
+    /<app-root[\s>]/i,                   // Angular
+    /ng-version=/i,                      // Angular
+    /data-v-app/i,                       // Vue 3
+  ]
+  const hasSpaRoot = spaRoots.some(rx => rx.test(html))
+
+  // Very thin text content (< 150 words) despite being a real page
+  const text = html.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim()
+  const wordCount = text.split(/\s+/).filter(Boolean).length
+  const thinContent = wordCount < 150
+
+  // Scripts pointing to typical SPA build artifacts
+  const hasSpaScript = /(?:main\.|app\.|bundle\.)[a-f0-9]{8,}\.js|\/static\/js\/|\/assets\/index\.[a-f0-9]+\.js/.test(html)
+
+  return hasSpaRoot || (thinContent && hasSpaScript)
 }
