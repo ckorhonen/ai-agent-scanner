@@ -126,6 +126,14 @@ export function generateRecommendations(
       effort: 'low',
       impact: 'high',
       example: llmsCheck.example,
+      issues: ['No /llms.txt or /.well-known/llms.txt found'],
+      steps: [
+        'Create /llms.txt at your domain root',
+        'Describe your site purpose in 2–3 sentences using Markdown',
+        'List your 5–10 most important pages with links and descriptions',
+        'Add a "Not permitted" section if you restrict AI training',
+        'Reference it in robots.txt: `# See /llms.txt for AI guidance`',
+      ],
     })
   }
 
@@ -140,6 +148,18 @@ export function generateRecommendations(
       effort: 'low',
       impact: 'high',
       example: check?.example,
+      issues: [
+        'No mcp-tool attributes found on any interactive elements',
+        'No mcp-param attributes on form inputs',
+        'No mcp-description context for AI agents',
+      ],
+      steps: [
+        'Add mcp-tool="action-name" to your primary form (e.g. search, checkout)',
+        'Add mcp-param="fieldName" to each input inside the form',
+        'Add mcp-description="Plain English description" to the form and each param',
+        'Test: open DevTools → document.querySelectorAll(\'[mcp-tool]\').length',
+        'Read the spec: https://webmcp.dev',
+      ],
     })
   }
 
@@ -161,6 +181,14 @@ export function generateRecommendations(
     "url": "https://example.com/openapi.json"
   }
 }`,
+      issues: ['No /.well-known/ai-plugin.json or OpenAPI spec reference found'],
+      steps: [
+        'Create /.well-known/ai-plugin.json with your API metadata',
+        'Write or generate an OpenAPI 3.0 spec for your main endpoints',
+        'Host the spec at /openapi.json',
+        'Add <link rel="ai-plugin" href="/.well-known/ai-plugin.json"> to <head>',
+        'Test: curl https://yoursite.com/.well-known/ai-plugin.json',
+      ],
     })
   }
 
@@ -175,6 +203,17 @@ export function generateRecommendations(
       effort: 'low',
       impact: 'high',
       example: check?.example,
+      issues: [
+        'No JSON-LD <script type="application/ld+json"> blocks found',
+        'No microdata or RDFa structured data detected',
+      ],
+      steps: [
+        'Add a <script type="application/ld+json"> block in your <head>',
+        'Start with WebSite + SearchAction schema (covers most homepage use cases)',
+        'Add Organization schema with contact info and social profiles',
+        'For content pages: add Article, Product, or FAQPage as appropriate',
+        'Validate: https://search.google.com/test/rich-results',
+      ],
     })
   }
 
@@ -188,6 +227,14 @@ export function generateRecommendations(
       points: 1,
       effort: 'low',
       impact: 'high',
+      issues: ['Site is served over HTTP (not HTTPS)'],
+      steps: [
+        'Get a free TLS certificate from Let\'s Encrypt via Certbot',
+        'Enable HTTPS on your web server (nginx/Apache config)',
+        'Add HSTS header: Strict-Transport-Security: max-age=31536000',
+        'Set up HTTP → HTTPS redirect (301)',
+        'Update all internal links to use https://',
+      ],
     })
   }
 
@@ -202,6 +249,14 @@ export function generateRecommendations(
       effort: 'low',
       impact: 'high',
       example: labelCheck.example,
+      issues: [labelCheck.detail],
+      steps: [
+        'Add a unique id to every <input> (e.g. id="email")',
+        'Add <label for="email">Email address</label> before each input',
+        'For icon-only inputs, use aria-label="..." instead',
+        'For grouped radio/checkbox, wrap in <fieldset> + <legend>',
+        'Test with: document.querySelectorAll(\'input:not([id])\')',
+      ],
     })
   }
 
@@ -215,12 +270,21 @@ export function generateRecommendations(
       points: 5,
       effort: 'medium',
       impact: 'high',
+      issues: ['CAPTCHA detected on primary form — blocks all AI agents'],
+      steps: [
+        'Add a honeypot field (hidden input that bots fill but humans ignore)',
+        'Implement server-side rate limiting per IP/session instead',
+        'Create a separate API endpoint with token auth for agent access',
+        'Consider Cloudflare Turnstile (CAPTCHA-free bot detection)',
+        'If you must keep CAPTCHA, expose a bypass key for trusted agents',
+      ],
     })
   }
 
   // ── Semantic HTML ──────────────────────────────────────────────────────────
   if (scores.semantic < 12) {
     const landmarkCheck = byCategory['semantic']?.checks.find(c => c.name.includes('landmark') && !c.passed)
+    const failedChecks = byCategory['semantic']?.checks.filter(c => !c.passed) ?? []
     recs.push({
       category: 'semantic',
       title: 'Add semantic HTML5 landmark elements',
@@ -229,6 +293,14 @@ export function generateRecommendations(
       effort: 'medium',
       impact: 'medium',
       example: landmarkCheck?.example,
+      issues: failedChecks.map(c => c.detail),
+      steps: [
+        'Wrap your page header in <header>, footer in <footer>',
+        'Wrap your primary content in <main> (only one per page)',
+        'Wrap navigation links in <nav>',
+        'Use <article> for self-contained content (blog posts, cards)',
+        'Replace decorative <div> containers with <section> where appropriate',
+      ],
     })
   }
 
@@ -243,6 +315,13 @@ export function generateRecommendations(
       effort: 'low',
       impact: 'high',
       example: h1Check.example,
+      issues: [h1Check.detail],
+      steps: [
+        'Add exactly one <h1> per page (multiple h1s confuse agents)',
+        'Make it descriptive: "Acme Invoice Automation" not "Welcome"',
+        'Place it near the top of <main>',
+        'Don\'t hide it — visible h1 is both good SEO and good for agents',
+      ],
     })
   }
 
@@ -257,11 +336,17 @@ export function generateRecommendations(
       effort: 'low',
       impact: 'medium',
       example: langCheck.example,
+      issues: ['No lang attribute on <html> element'],
+      steps: [
+        'Add lang="en" (or your language code) to your <html> tag',
+        'For multilingual pages, add lang attributes to individual sections too',
+        'Use BCP 47 codes: en, fr, de, zh-Hans, pt-BR, etc.',
+      ],
     })
   }
 
   // ── AI crawlers ────────────────────────────────────────────────────────────
-  const robotsCheck = byCategory['crawlability']?.checks.find(c => c.name.includes('robots.txt') && !c.passed)
+  const robotsCheck = byCategory['crawlability']?.checks.find(c => c.name.includes('robots.txt exists') && !c.passed)
   if (robotsCheck) {
     recs.push({
       category: 'crawlability',
@@ -271,6 +356,14 @@ export function generateRecommendations(
       effort: 'low',
       impact: 'medium',
       example: robotsCheck.example,
+      issues: ['No robots.txt found at /robots.txt'],
+      steps: [
+        'Create /robots.txt at your domain root',
+        'Add User-agent: * / Allow: / to permit all crawlers by default',
+        'Explicitly add rules for GPTBot, Claude-Web, anthropic-ai',
+        'Add Sitemap: https://yoursite.com/sitemap.xml at the bottom',
+        'Test: curl https://yoursite.com/robots.txt',
+      ],
     })
   }
 
@@ -284,6 +377,13 @@ export function generateRecommendations(
       effort: 'low',
       impact: 'high',
       example: aiBotsCheck.example,
+      issues: [aiBotsCheck.detail],
+      steps: [
+        'Open /robots.txt and find the Disallow rules blocking AI crawlers',
+        'Remove or change Disallow: / to Allow: / for GPTBot, Claude-Web',
+        'Optionally add explicit Allow rules for each AI crawler',
+        'Test with: robots-checker.io or curl -A "GPTBot" https://yoursite.com',
+      ],
     })
   }
 
@@ -298,6 +398,14 @@ export function generateRecommendations(
       effort: 'low',
       impact: 'medium',
       example: altCheck.example,
+      issues: [altCheck.detail],
+      steps: [
+        'Find all <img> tags missing alt attributes: document.querySelectorAll(\'img:not([alt])\')',
+        'Write descriptive alt text (what the image shows, not just "image")',
+        'For decorative images, use alt="" (empty string) to skip them',
+        'For complex charts/graphs, add a text summary below the image',
+        'For CMS sites: make alt text a required field in your media library',
+      ],
     })
   }
 

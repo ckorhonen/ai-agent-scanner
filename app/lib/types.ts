@@ -60,6 +60,10 @@ export interface Recommendation {
   effort: Effort
   impact: Impact
   example?: string
+  /** Specific issues found on this site */
+  issues: string[]
+  /** Concrete actionable steps (3–5 items) */
+  steps: string[]
 }
 
 export interface ScanRequest {
