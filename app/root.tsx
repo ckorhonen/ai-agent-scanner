@@ -95,6 +95,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
         <meta charSet="utf-8" />
         <meta name="viewport" content="width=device-width, initial-scale=1" />
         <link rel="canonical" href="https://scanner.v1be.codes" />
+        <link rel="ai-plugin" href="/.well-known/ai-plugin.json" />
         <Meta />
         <Links />
         <script
