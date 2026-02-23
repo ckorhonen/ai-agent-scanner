@@ -29,7 +29,7 @@ const DATA: SiteDatum[] = [
   { domain: 'paypal.com',      score: 32, grade: 'F', category: 'Payments',     measured: false, highlight: 'Legacy HTML, blocks AI crawlers' },
   { domain: 'square.com',      score: 38, grade: 'F', category: 'Payments',     measured: false },
   // Developer Tools
-  { domain: 'scanner.v1be.codes', score: 62, grade: 'C', category: 'Dev Tools', measured: true,  highlight: 'WebMCP pending → will hit Grade B' },
+  { domain: 'scanner.v1be.codes', score: 84, grade: 'B', category: 'Dev Tools', measured: true,  highlight: 'AI-Native 🔵 — went from 44/D → 84/B in one weekend' },
   { domain: 'vercel.com',      score: 48, grade: 'D', category: 'Dev Tools',    measured: true,  highlight: 'Has llms.txt ✓' },
   { domain: 'netlify.com',     score: 50, grade: 'D', category: 'Dev Tools',    measured: false },
   { domain: 'railway.app',     score: 45, grade: 'D', category: 'Dev Tools',    measured: false },
